@@ -1,0 +1,5 @@
+together
+python-dotenv
+pydantic
+pydantic-settings
+tqdm

@@ -1,0 +1,51 @@
+[
+  {
+    "template": "You are a meticulous reasoner. For the problem below, think step-by-step. If you find yourself looping, you may insert <leap>...</leap> with a bold guess based on pattern recognition, then check it.\n\nProblem: $question",
+    "fewshot": [
+      {
+        "role": "user",
+        "content": "Problem: What is 19 x 21?"
+      },
+      {
+        "role": "assistant",
+        "content": "<think>Perhaps recall (20-1)(20+1)=20^2-1=399</think> **Answer:** 399"
+      }
+    ]
+  },
+
+  {
+    "template": "Solve the following. Reason normally inside <think> tags, but if your chain stalls, trigger a <leap> tag with an inspired shortcut and continue.\n\n$question"
+  },
+
+  {
+    "template": "Let's tackle this like a mathematician who sometimes has flashes of insight. During the <think> phase you may add <leap>Hypothesis...</leap> to jump ahead. Finish with **Answer:**.\n\nQuestion: $question"
+  },
+
+  {
+    "template": "Answer succinctly. Use <think>...</think>. If the straightforward path looks long, insert <leap>...</leap> to guess the structure and verify.\n\n$question"
+  },
+
+  {
+    "template": "You may at most use 10 thinking steps. If unsolved at step 6, perform <leap>radical re-framing</leap>.\n\nTask: $question"
+  },
+
+  {
+    "template": "Approach the riddle with ordinary reasoning. If you detect a dead end, switch into an <leap> analogy mode</leap> and then converge.\n\n$riddle"
+  },
+
+  {
+    "template": "Compute efficiently. Use <leap> mental math trick</leap> when numbers are awkward.\n\n$question"
+  },
+
+  {
+    "template": "General solution expected. Employ <think> derivation </think>. You are permitted one <leap> big picture insight </leap>.\n\n$question"
+  },
+
+  {
+    "template": "Expert puzzle solver mode. Normal reasoning in <think>. One optional <leap> guess-and-check </leap> allowed.\n\n$question"
+  },
+
+  {
+    "template": "Provide the final answer only after coherent reasoning. If memory retrieval fails, you may use <leap> intuitive recall </leap> based on related facts.\n\n$question"
+  }
+]
