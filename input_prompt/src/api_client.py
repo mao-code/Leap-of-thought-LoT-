@@ -21,12 +21,18 @@ def chat_completion(messages, **extra):
         **extra,
     )
     
-    # Persist raw for reproducibility
-    ts = datetime.utcnow().isoformat()
-    Path(settings.log_dir).mkdir(parents=True, exist_ok=True)
-    raw_path = Path(settings.log_dir) / f"{ts}.json"
-    raw_path.write_text(response.model_dump_json(indent=2, exclude_none=True))
+    log_dir = Path(settings.log_dir)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "chat_logs.jsonl"
+
+    # include timestamp in the record if you like
+    record = response.model_dump(exclude_none=True)
+    record["timestamp"] = datetime.utcnow().isoformat()
+
+    with log_file.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, indent=None) + "\n")
 
     content = response.choices[0].message.content
     usage = response.usage.model_dump()
+    
     return content, usage

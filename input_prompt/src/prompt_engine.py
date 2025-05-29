@@ -10,9 +10,13 @@ def load_templates():
 
 TEMPLATES = load_templates()
 
-def build_prompt(question: str, fewshot: bool = False):
-    tpl = random.choice(TEMPLATES)
-    user_msg = Template(tpl["template"]).substitute(question=question)
+def build_prompt(question: str, fewshot: bool = False, leap: bool = True):
+    # tpl = random.choice(TEMPLATES)
+    tpl = TEMPLATES[0]
+
+    tpl_msg = Template(tpl["leap_template"]) if leap else Template(tpl["non_leap_template"])
+    user_msg = tpl_msg.substitute(question=question)
+
     msgs = []
     if fewshot and tpl.get("fewshot"):
         msgs.extend(tpl["fewshot"])  # list of dicts with role/content

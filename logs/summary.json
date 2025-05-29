@@ -1,0 +1,6 @@
+{
+  "non_leap_accuracy": 0.9,
+  "non_leap_avg_reasoning_tokens": 462.1,
+  "leap_accuracy": 0.9,
+  "leap_avg_reasoning_tokens": 364.6
+}
