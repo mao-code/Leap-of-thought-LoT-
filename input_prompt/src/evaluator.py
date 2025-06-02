@@ -68,5 +68,6 @@ def evaluate(dataset_path: str, fewshot: bool = False):
         "leap_accuracy": leap_accuracy,
         "leap_avg_reasoning_tokens": leap_avg_tokens
     }
-    Path("logs/summary.json").write_text(json.dumps(summary, indent=2))
+    Path("logs/input_prompts_summary.json").write_text(json.dumps(summary, indent=2))
+    Path("logs/input_prompts_records.json").write_text(json.dumps(records, indent=2))
     return summary, records
