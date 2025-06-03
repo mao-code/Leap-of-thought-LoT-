@@ -4,26 +4,10 @@ Hugging Face chat model**.
 
 Example:
     python -m reasoning_output.quick_test \
-        --model-path deepseek-ai/DeepSeek-R1-Distill-Qwen-32B \
-        --question "If Alice has 3 times as many apples as Bob and together they have 16, how many apples does Alice have?"
+        --model deepseek-ai/DeepSeek-R1-Distill-Qwen-32B \
+        --question "If Alice has 3 times as many apples as Bob and together they have 16, how many apples does Alice have?" \
+        --max-new 1024
 """
-
-#  reasoning_output/quick_test_manual.py
-#
-#  Token-by-token Leap-of-Thought with KV-cache surgery
-#  ---------------------------------------------------
-#  • The model sees     [prompt | first-half-CoT | <leap>…]   *in one context*.
-#  • The first half of the CoT is generated in-flight; we then
-#      slice the past_key_values so the *second* half never reaches attention.
-#  • Works with any causal LM from Hugging Face.
-#
-#  Usage example
-#  -------------
-#  python -m reasoning_output.quick_test_manual \
-#         --model deepseek-ai/DeepSeek-R1-Distill-Qwen-32B \
-#         --question "If Alice has 3× Bob and together they have 16, how many apples does Alice have?"
-#
-#  --------------------------------------------------------------
 
 from __future__ import annotations
 import argparse, re, sys, torch, math
@@ -32,7 +16,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from reasoning_output.perplexity import split_sentences
-from input_prompt.src.prompt_engine   import build_prompt
+from input_prompt.src.prompt_engine   import build_plain_prompt
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE  = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
@@ -91,7 +75,7 @@ def stream_with_leap(question: str, tok, mdl,
                      top_p: float = 0.9):
 
     # 0) build plain prompt (few-shot, no leap) and encode once
-    prompt = build_prompt(question=question, leap=True, fewshot=True)
+    prompt = build_plain_prompt(question=question, leap=True, fewshot=True)
     prompt_ids = tok(prompt, return_tensors="pt").input_ids.to(mdl.device)
 
     # 1) run **token-stream** to get the COMPLETE normal reasoning
@@ -156,7 +140,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model",    required=True)
     ap.add_argument("--question", required=True)
-    ap.add_argument("--max-new",  type=int,   default=512)
+    ap.add_argument("--max-new",  type=int,   default=1024)
     ap.add_argument("--temp",     type=float, default=0.7)
     ap.add_argument("--top-p",    type=float, default=0.9)
     args = ap.parse_args()
