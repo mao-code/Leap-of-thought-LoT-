@@ -3,3 +3,8 @@ python-dotenv
 pydantic
 pydantic-settings
 tqdm
+
+openai
+torch
+transformers
+accelerate
