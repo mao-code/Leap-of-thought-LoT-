@@ -9,7 +9,7 @@ Example:
         --model deepseek-ai/DeepSeek-R1-Distill-Qwen-32B \
         --data input_prompt/data/gsm8k_demo.jsonl \
         --question "If Alice has 3 times as many apples as Bob and together they have 16, how many apples does Alice have?" \
-        --max-new 1024
+        --max-new 1024 > output.txt
 """
 
 import argparse
@@ -28,6 +28,7 @@ from reasoning_output.perplexity import split_sentences
 from input_prompt.src.prompt_engine import build_plain_prompt
 import json
 from tqdm import tqdm
+from utils import set_seed
 
 #───────────────────────────────────────────────────────────────────────────────
 #  Helpers
@@ -36,6 +37,7 @@ from tqdm import tqdm
 DEVICE = None  # will be set once the model is loaded
 DTYPE  = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
 ANSWER_RE = re.compile(r"\*\*Answer:\*\*\s*(.+)", re.I)
+set_seed()
 
 def load_model(repo_or_path: str):
     """
@@ -107,7 +109,7 @@ def stream_with_leap(
     generated_ids: List[int] = []
     cache = DynamicCache()  # Explicitly initialize cache
 
-    out = mdl(input_ids=prompt_ids, past_key_values=cache, use_cache=True)
+    out = mdl(input_ids=prompt_ids, use_cache=True)
     cache = out.past_key_values
     last_logits = out.logits[:, -1, :]
 
@@ -273,6 +275,9 @@ def main():
                 "correct_lot": is_correct_lot,
                 "tokens_normal": tok_count_normal,
                 "tokens_lot": tok_count_lot,
+
+                "normal_text": normal_text,
+                "lot_text": lot_text
             })
 
         # Compute overall metrics
