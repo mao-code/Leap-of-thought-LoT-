@@ -137,7 +137,7 @@ def stream_with_leap(
     # Calculate token length to keep
     prefix_text = pre_answer_text[:pivot_char_idx]
     prefix_ids = tok(prefix_text, add_special_tokens=False).input_ids
-    keep_token_len = len(prefix_ids)  # Only prefix tokens, not prompt
+    keep_token_len = prompt_ids.shape[-1] + len(prefix_ids)
 
     # Prune cache to prefix length
     cache.crop(keep_token_len)
@@ -184,9 +184,9 @@ def extract_answer(text: str) -> str:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model",    required=True)
-    ap.add_argument("--question", required=True)
-    ap.add_argument("--data",    type=str,   default="input_prompt/data/gsm8k_demo.jsonl")
+    ap.add_argument("--model",    type=str, required=True)
+    ap.add_argument("--question", type=str, default="If Alice has 3 times as many apples as Bob and together they have 16, how many apples does Alice have?")
+    ap.add_argument("--data",     type=str,   default=None)
     ap.add_argument("--max-new",  type=int,   default=1024)
     ap.add_argument("--temp",     type=float, default=0.6)
     ap.add_argument("--top-p",    type=float, default=0.9)
