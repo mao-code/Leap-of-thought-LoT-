@@ -9,7 +9,3 @@ def set_seed():
     np.random.seed(SEED)                         # NumPy RNG
     torch.manual_seed(SEED)                      # CPU & default CUDA RNG
     torch.cuda.manual_seed_all(SEED)             # all GPUs
-
-    torch.backends.cudnn.deterministic = True   # only deterministic kernels
-    torch.backends.cudnn.benchmark = False      # disable autotuner
-    torch.use_deterministic_algorithms(True)    # error-out if op has no deterministic impl

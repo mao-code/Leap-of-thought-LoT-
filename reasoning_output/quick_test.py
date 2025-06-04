@@ -107,7 +107,6 @@ def stream_with_leap(
 
     # Generate normal reasoning with cache
     generated_ids: List[int] = []
-    cache = DynamicCache()  # Explicitly initialize cache
 
     out = mdl(input_ids=prompt_ids, use_cache=True)
     cache = out.past_key_values
@@ -123,7 +122,7 @@ def stream_with_leap(
         cache = out.past_key_values
         last_logits = out.logits[:, -1, :]
 
-    normal_text = tok.decode(generated_ids, skip_special_tokens=True)
+    normal_text = tok.decode(generated_ids, skip_special_tokens=False)
 
     # Split text and determine pivot for pruning
     pre_answer_text = ANSWER_RE.split(normal_text)[0]
@@ -166,7 +165,7 @@ def stream_with_leap(
         last_logits = out.logits[:, -1, :]
 
     # Construct final LoT text
-    lot_text = prefix_text + leap_text + tok.decode(lot_gen_ids, skip_special_tokens=True)
+    lot_text = prefix_text + leap_text + tok.decode(lot_gen_ids, skip_special_tokens=False)
 
     return prompt, normal_text, lot_text
 
