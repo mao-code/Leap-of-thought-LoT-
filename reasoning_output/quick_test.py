@@ -29,6 +29,7 @@ from input_prompt.src.prompt_engine import build_plain_prompt
 import json
 from tqdm import tqdm
 from utils import set_seed
+from dataset.gsm8k_loader import GSM8KLoader
 
 #───────────────────────────────────────────────────────────────────────────────
 #  Helpers
@@ -186,8 +187,9 @@ def extract_answer(text: str) -> str:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model",    type=str, required=True)
-    ap.add_argument("--question", type=str, default="If Alice has 3 times as many apples as Bob and together they have 16, how many apples does Alice have?")
-    ap.add_argument("--data",     type=str,   default=None)
+    # ap.add_argument("--question", type=str, default="If Alice has 3 times as many apples as Bob and together they have 16, how many apples does Alice have?")
+    # ap.add_argument("--data",     type=str,   default=None)
+    ap.add_argument("--num_samples",  type=int, default=10)
     ap.add_argument("--max-new",  type=int,   default=1024)
     ap.add_argument("--temp",     type=float, default=0.6)
     ap.add_argument("--top-p",    type=float, default=0.9)
@@ -195,9 +197,47 @@ def main():
 
     tok, mdl = load_model(args.model)
 
-    if not args.data:
+    # prompt, normal_text, lot_text = stream_with_leap(
+    #     args.question,
+    #     tok,
+    #     mdl,
+    #     max_new=args.max_new,
+    #     temperature=args.temp,
+    #     top_p=args.top_p
+    # )
+
+    # print("──── Prompt ──────────────────────────────────────")
+    # print(prompt)
+
+    # print("\n──── Normal Reasoning ─────────────────────────────")
+    # print(normal_text)
+    # print("Length of normal reasoning (in tokens):", len(tok(normal_text).input_ids))
+
+    # print("\n──── LoT ─────────────────────────────────────────")
+    # print(lot_text)
+    # print("Length of LoT reasoning (in tokens):", len(tok(lot_text).input_ids))
+
+    # Read all JSONL lines
+    # with open(args.data, "r", encoding="utf-8") as f:
+    #     data = [json.loads(l) for l in f]
+
+    n_examples = len(args.num_samples)
+    loader = GSM8KLoader(split="train", num_samples=args.num_samples)
+    correct_normal = 0
+    correct_lot = 0
+    sum_tokens_normal = 0
+    sum_tokens_lot = 0
+
+    # (Optional) You can store per-sample details in a list if you want to inspect later
+    records = []
+
+    for idx, sample in tqdm(enumerate(loader), desc="Evaluating"):
+        question = sample.get("question", "").strip()
+        gold_answers = [a.strip() for a in sample.get("answers", [])]
+
+        # Generate both reasoning paths
         prompt, normal_text, lot_text = stream_with_leap(
-            args.question,
+            question,
             tok,
             mdl,
             max_new=args.max_new,
@@ -205,79 +245,40 @@ def main():
             top_p=args.top_p
         )
 
-        print("──── Prompt ──────────────────────────────────────")
-        print(prompt)
+        # Extract just the answer portion from each generated text
+        ans_normal = extract_answer(normal_text)
+        ans_lot = extract_answer(lot_text)
 
-        print("\n──── Normal Reasoning ─────────────────────────────")
-        print(normal_text)
-        print("Length of normal reasoning (in tokens):", len(tok(normal_text).input_ids))
+        # Compare against any of the gold answers (string match, case-insensitive)
+        is_correct_normal = any(ans_normal.lower() == ga.lower() for ga in gold_answers)
+        is_correct_lot = any(ans_lot.lower() == ga.lower() for ga in gold_answers)
 
-        print("\n──── LoT ─────────────────────────────────────────")
-        print(lot_text)
-        print("Length of LoT reasoning (in tokens):", len(tok(lot_text).input_ids))
+        # Count tokens of the entire generated string (including CoT + answer)
+        tok_count_normal = len(tok(normal_text).input_ids)
+        tok_count_lot = len(tok(lot_text).input_ids)
 
-    else:
-        # Read all JSONL lines
-        with open(args.data, "r", encoding="utf-8") as f:
-            data = [json.loads(l) for l in f]
+        # Accumulate
+        if is_correct_normal:
+            correct_normal += 1
+        if is_correct_lot:
+            correct_lot += 1
+        sum_tokens_normal += tok_count_normal
+        sum_tokens_lot += tok_count_lot
 
-        n_examples = len(data)
-        correct_normal = 0
-        correct_lot = 0
-        sum_tokens_normal = 0
-        sum_tokens_lot = 0
+        # (Optional) store details
+        records.append({
+            "question": question,
+            "gold_answers": gold_answers,
+            "ans_normal": ans_normal,
+            "ans_lot": ans_lot,
+            "correct_normal": is_correct_normal,
+            "correct_lot": is_correct_lot,
+            "tokens_normal": tok_count_normal,
+            "tokens_lot": tok_count_lot,
 
-        # (Optional) You can store per-sample details in a list if you want to inspect later
-        records = []
-
-        for sample in tqdm(data, desc="Evaluating"):
-            question = sample.get("question", "").strip()
-            gold_answers = [a.strip() for a in sample.get("answers", [])]
-
-            # Generate both reasoning paths
-            prompt, normal_text, lot_text = stream_with_leap(
-                question,
-                tok,
-                mdl,
-                max_new=args.max_new,
-                temperature=args.temp,
-                top_p=args.top_p
-            )
-
-            # Extract just the answer portion from each generated text
-            ans_normal = extract_answer(normal_text)
-            ans_lot = extract_answer(lot_text)
-
-            # Compare against any of the gold answers (string match, case-insensitive)
-            is_correct_normal = any(ans_normal.lower() == ga.lower() for ga in gold_answers)
-            is_correct_lot = any(ans_lot.lower() == ga.lower() for ga in gold_answers)
-
-            # Count tokens of the entire generated string (including CoT + answer)
-            tok_count_normal = len(tok(normal_text).input_ids)
-            tok_count_lot = len(tok(lot_text).input_ids)
-
-            # Accumulate
-            if is_correct_normal:
-                correct_normal += 1
-            if is_correct_lot:
-                correct_lot += 1
-            sum_tokens_normal += tok_count_normal
-            sum_tokens_lot += tok_count_lot
-
-            # (Optional) store details
-            records.append({
-                "question": question,
-                "gold_answers": gold_answers,
-                "ans_normal": ans_normal,
-                "ans_lot": ans_lot,
-                "correct_normal": is_correct_normal,
-                "correct_lot": is_correct_lot,
-                "tokens_normal": tok_count_normal,
-                "tokens_lot": tok_count_lot,
-
-                "normal_text": normal_text,
-                "lot_text": lot_text
-            })
+            "normal_text": normal_text,
+            "lot_text": lot_text
+        })
 
         # Compute overall metrics
         acc_normal = correct_normal / n_examples if n_examples > 0 else 0.0
