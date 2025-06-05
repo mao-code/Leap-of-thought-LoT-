@@ -8,3 +8,4 @@ openai
 torch
 transformers
 accelerate
+datasets

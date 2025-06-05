@@ -7,9 +7,8 @@ Hugging Face chat model**.
 Example:
     python -m reasoning_output.quick_test \
         --model deepseek-ai/DeepSeek-R1-Distill-Qwen-32B \
-        --data input_prompt/data/gsm8k_demo.jsonl \
-        --question "If Alice has 3 times as many apples as Bob and together they have 16, how many apples does Alice have?" \
-        --max-new 1024 > output.txt
+        --num_samples 1 \
+        --max-new 1024
 """
 
 import argparse
@@ -221,7 +220,7 @@ def main():
     # with open(args.data, "r", encoding="utf-8") as f:
     #     data = [json.loads(l) for l in f]
 
-    n_examples = len(args.num_samples)
+    n_examples = args.num_samples
     loader = GSM8KLoader(split="train", num_samples=args.num_samples)
     correct_normal = 0
     correct_lot = 0
@@ -231,7 +230,7 @@ def main():
     # (Optional) You can store per-sample details in a list if you want to inspect later
     records = []
 
-    for idx, sample in tqdm(enumerate(loader), desc="Evaluating"):
+    for sample in tqdm(loader, total=n_examples, desc="Evaluating"):
         question = sample.get("question", "").strip()
         gold_answers = [a.strip() for a in sample.get("answers", [])]
 

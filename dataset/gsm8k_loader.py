@@ -28,21 +28,40 @@ class GSM8KLoader:
         self._num_samples = num_samples
         self._samples_yielded = 0
 
+    def _extract_final_answer(self, raw_ans: str) -> str:
+        """
+        Given a raw answer string (which may contain multiple lines and
+        "####" markers), return just the text after the last "####", stripped.
+        If "####" is not present, return raw_ans.strip().
+        """
+        if "#### " in raw_ans:
+            # Split on "####" and take the last segment
+            parts = raw_ans.split("#### ")
+            answer_part = parts[-1].strip()
+        else:
+            answer_part = raw_ans.strip()
+        return answer_part
+
+
     def __iter__(self):
         """
         Yields one transformed example at a time:
         {"question": <str>, "answers": [<str>]}.
-        Honors num_samples limit if provided. :contentReference[oaicite:22]{index=22}
+        Honors num_samples limit if provided.
         """
         for raw in self._buffered_iterator:
             if self._num_samples is not None and self._samples_yielded >= self._num_samples:
                 break
 
             q_text = raw.get("question", "").strip()  # Get question
-            raw_ans = raw.get("answer", "").strip()  # Get answer as string
+            raw_answer_str = raw.get("answer", "").strip()  # Get answer as string
+            final_answer = self._extract_final_answer(raw_answer_str)
 
-            # Wrap into list under "answers"
-            answers_list: List[str] = [raw_ans] if raw_ans != "" else []
+            # 3) Wrap into a single-element list (or empty list if nothing)
+            if final_answer != "":
+                answers_list: List[str] = [final_answer]
+            else:
+                answers_list = []
 
             transformed = {
                 "question": q_text,
