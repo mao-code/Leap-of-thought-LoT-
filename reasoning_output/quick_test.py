@@ -8,7 +8,7 @@ Example:
     python -m reasoning_output.quick_test \
         --model deepseek-ai/DeepSeek-R1-Distill-Qwen-32B \
         --num_samples 1 \
-        --max-new 1024
+        --max-new 2048
 """
 
 import argparse
@@ -305,23 +305,23 @@ def main():
             "lot_text": lot_text
         })
 
-        # Compute overall metrics
-        acc_normal = correct_normal / n_examples if n_examples > 0 else 0.0
-        acc_lot = correct_lot / n_examples if n_examples > 0 else 0.0
-        avg_tok_normal = sum_tokens_normal / n_examples if n_examples > 0 else 0.0
-        avg_tok_lot = sum_tokens_lot / n_examples if n_examples > 0 else 0.0
+    # Compute overall metrics
+    acc_normal = correct_normal / n_examples if n_examples > 0 else 0.0
+    acc_lot = correct_lot / n_examples if n_examples > 0 else 0.0
+    avg_tok_normal = sum_tokens_normal / n_examples if n_examples > 0 else 0.0
+    avg_tok_lot = sum_tokens_lot / n_examples if n_examples > 0 else 0.0
 
-        # Print summary
-        print("\n──────────────────────────────────────────────────────")
-        print(f"Total examples       : {n_examples}")
-        print(f"Normal Reasoning     : Accuracy = {acc_normal:.2%},  Avg Tokens = {avg_tok_normal:.1f}")
-        print(f"LoT Reasoning        : Accuracy = {acc_lot:.2%},  Avg Tokens = {avg_tok_lot:.1f}")
-        print("──────────────────────────────────────────────────────")
+    # Print summary
+    print("\n──────────────────────────────────────────────────────")
+    print(f"Total examples       : {n_examples}")
+    print(f"Normal Reasoning     : Accuracy = {acc_normal:.2%},  Avg Tokens = {avg_tok_normal:.1f}")
+    print(f"LoT Reasoning        : Accuracy = {acc_lot:.2%},  Avg Tokens = {avg_tok_lot:.1f}")
+    print("──────────────────────────────────────────────────────")
 
-        # Optionally, write `records` to a JSONL or CSV for inspection
-        with open("detailed_eval.jsonl", "w", encoding="utf-8") as outf:
-            for rec in records:
-                outf.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    # Optionally, write `records` to a JSONL or CSV for inspection
+    with open("detailed_eval.jsonl", "w", encoding="utf-8") as outf:
+        for rec in records:
+            outf.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
 if __name__ == "__main__":
     sys.exit(main())

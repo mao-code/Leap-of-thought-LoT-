@@ -1,6 +1,6 @@
 [
   {
-    "leap_template": "You are a meticulous reasoner. For the problem below, think step-by-step inside <think>...</think>.  Try to make a bold and clever insight, wrap it in <leap>...</leap> as a leap thought. The 'leap thought' is an inspiration, an clever idea that can speed ud the reasoning in a clever way. When you are done, output **only** the final answer (just the number or word), with no additional explanation like this format: '**Answer:**{the answer}'.\n\nProblem: $question\n\n<think>",
+    "leap_template": "You are a meticulous reasoner. For the problem below, think step-by-step inside <think>...</think>.  Try to make a bold and clever insight, wrap it in <leap>...</leap> as a leap thought. The 'leap thought' is an inspiration, an clever idea that can speed ud the reasoning in a clever way. When you are done, output **only** the final answer (just the number or word), with no additional explanation and symbols like this format: '**Answer:**{the answer}'.\n\nProblem: $question\n\n<think>",
 
     "non_leap_template": "You are a meticulous reasoner. For the problem below, think step-by-step inside <think>...</think>. When you are done, output **only** the final answer (just the number or word), with no additional explanation like this format: '**Answer:**{the answer}'.\n\nProblem: $question",
 
