@@ -170,14 +170,33 @@ def stream_with_leap(
     return prompt, normal_text, lot_text
 
 def extract_answer(text: str) -> str:
-    """
-    Pull out whatever follows "**Answer:**" in a generated text.
-    If there's no match, return an empty string.
-    """
+    """Return the raw answer text following the ``**Answer:**`` marker."""
     m = ANSWER_RE.search(text)
-    if m:
-        return m.group(1).strip()
-    return ""
+    return m.group(1).strip() if m else ""
+
+
+def normalize_answer(ans: str) -> str:
+    """Normalize predicted or gold answers for robust comparison."""
+    ans = ans.strip()
+    # Remove surrounding punctuation and common currency symbols
+    ans = ans.strip(" .,!?")
+    ans = ans.lstrip("$€£¥")
+    # Remove thousands separators
+    ans = ans.replace(",", "")
+
+    # If the remaining text is purely numeric, standardize its format
+    num_str = ans
+    if re.fullmatch(r"-?\d+(?:\.\d+)?", num_str):
+        try:
+            num = float(num_str)
+        except ValueError:
+            pass
+        else:
+            if num.is_integer():
+                ans = str(int(num))
+            else:
+                ans = ("%f" % num).rstrip("0").rstrip(".")
+    return ans
 
 #───────────────────────────────────────────────────────────────────────────────
 #  CLI
@@ -248,9 +267,14 @@ def main():
         ans_normal = extract_answer(normal_text)
         ans_lot = extract_answer(lot_text)
 
-        # Compare against any of the gold answers (string match, case-insensitive)
-        is_correct_normal = any(ans_normal.lower() == ga.lower() for ga in gold_answers)
-        is_correct_lot = any(ans_lot.lower() == ga.lower() for ga in gold_answers)
+        # Normalize all answers for robust comparison
+        norm_normal = normalize_answer(ans_normal)
+        norm_lot = normalize_answer(ans_lot)
+        norm_gold = [normalize_answer(ga) for ga in gold_answers]
+
+        # Compare against any of the gold answers (case-insensitive)
+        is_correct_normal = any(norm_normal.lower() == ga.lower() for ga in norm_gold)
+        is_correct_lot = any(norm_lot.lower() == ga.lower() for ga in norm_gold)
 
         # Count tokens of the entire generated string (including CoT + answer)
         tok_count_normal = len(tok(normal_text).input_ids)
@@ -270,6 +294,8 @@ def main():
             "gold_answers": gold_answers,
             "ans_normal": ans_normal,
             "ans_lot": ans_lot,
+            "norm_normal": norm_normal,
+            "norm_lot": norm_lot,
             "correct_normal": is_correct_normal,
             "correct_lot": is_correct_lot,
             "tokens_normal": tok_count_normal,
