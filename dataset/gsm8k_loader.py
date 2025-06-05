@@ -86,9 +86,10 @@ class GSM8KLoader:
         slice_iter = itertools.islice(self._buffered_iterator, n)
         examples = []
         for raw in slice_iter:
-            q_text = raw.get("question", "").strip() 
-            raw_ans = raw.get("answer", "").strip() 
-            answers_list = [raw_ans] if raw_ans != "" else []
+            q_text = raw.get("question", "").strip()
+            raw_ans = raw.get("answer", "").strip()
+            final_ans = self._extract_final_answer(raw_ans)
+            answers_list = [final_ans] if final_ans != "" else []
 
             examples.append({
                 "question": q_text,
