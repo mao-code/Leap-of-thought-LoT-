@@ -1,32 +1,27 @@
-"""Light‑weight evaluator mirroring the original version but with leap logic."""
+"""Light-weight evaluator for the LoT-2 pipeline."""
 from __future__ import annotations
 
 import json
 from pathlib import Path
 from tqdm import tqdm
 
-from reasoning_output.generator import LeapGenerator, dump_record
-import re
+from reasoning_output.src.generator import LeapGenerator, dump_record
+from reasoning_output.src.utils import extract_answer, normalize_answer
 
-ANSWER_RE = re.compile(r"\*\*Answer:\*\*\s*(.+)", re.I)
-
-def _extract_answer(text: str):
-    m = ANSWER_RE.search(text)
-    return m.group(1).strip() if m else None
 
 def evaluate(dataset_path: str, *, fewshot: bool = False):
     gen = LeapGenerator()
     records = []
-    with open(dataset_path) as f:
+    with open(dataset_path, "r", encoding="utf-8") as f:
         data = [json.loads(l) for l in f]
 
     for sample in tqdm(data, desc="Evaluating-with-RWP"):
         rec = gen.generate(sample["question"], fewshot=fewshot)
-        pred = _extract_answer(rec.get("leap_answer") or rec["first_answer"])
-        correct = pred in sample["answers"]
-        rec["pred"] = pred
-        rec["gold"] = sample["answers"]
-        rec["correct"] = correct
+        pred_raw = extract_answer(rec.get("leap_answer") or rec["first_answer"])
+        pred = normalize_answer(pred_raw)
+        gold_norm = [normalize_answer(a) for a in sample["answers"]]
+        correct = any(pred.lower() == g.lower() for g in gold_norm)
+        rec.update({"pred": pred_raw, "gold": sample["answers"], "correct": correct})
         records.append(rec)
         dump_record(rec)
 

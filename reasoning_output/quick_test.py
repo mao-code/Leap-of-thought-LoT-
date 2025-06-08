@@ -23,7 +23,7 @@ from transformers import (
     AutoModelForCausalLM,
     DynamicCache,            # HF's dynamic cache implementation
 )
-from reasoning_output.perplexity import split_sentences
+from reasoning_output.src.perplexity import split_sentences
 from input_prompt.src.prompt_engine import build_plain_prompt
 import json
 from tqdm import tqdm

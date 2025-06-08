@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from config import settings
-from reasoning_output.perplexity import split_sentences, reasoning_wise_perplexity
+from reasoning_output.src.perplexity import split_sentences, reasoning_wise_perplexity
 from model_provider import BaseModel
 
 
