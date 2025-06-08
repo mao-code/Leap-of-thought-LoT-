@@ -45,7 +45,7 @@ class LeapGenerator:
     def generate(self, question: str, fewshot: bool = False) -> dict:
         """Generate reasoning and dynamically insert a <leap> once RWP is high."""
 
-        prompt = build_plain_prompt(question=question, fewshot=fewshot, leap=False)
+        prompt = build_plain_prompt(question=question, fewshot=fewshot, leap=True)
         prompt_ids = self.tok(prompt, return_tensors="pt", add_special_tokens=True).input_ids.to(self.device)
 
         # --- first pass: generate until RWP exceeds threshold ---
