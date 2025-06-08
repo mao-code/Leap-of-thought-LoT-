@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     log_dir: str = Field("logs", env="LOT_LOG_DIR")
 
     # ── RWP‑criterion hyper‑parameters ───────────────────────────────────────
-    rwp_threshold: float = Field(50.0, env="LOT_RWP_THRESHOLD")
+    rwp_threshold: float = Field(10.0, env="LOT_RWP_THRESHOLD")
     window: int = Field(10, env="LOT_RWP_WINDOW", description="Sliding-window for RWP^{(w)}")
 
     class Config:

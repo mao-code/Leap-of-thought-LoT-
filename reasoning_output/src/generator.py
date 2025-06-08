@@ -67,7 +67,7 @@ class LeapGenerator:
         next_token = torch.multinomial(sorted_probs, 1)
         return sorted_idx[next_token].item()
 
-
+    @torch.inference_mode()
     def generate(self, question: str, fewshot: bool = False, use_window_rwp=False) -> dict:
         """Generate reasoning and dynamically insert a <leap> once RWP is high."""
 
@@ -110,7 +110,7 @@ class LeapGenerator:
                 if should_leap:
                     pivot_token = sent_start - len(self.tok(text_piece, add_special_tokens=False).input_ids)
                     
-        normal_ids = gen_ids[...]
+        normal_ids = gen_ids[:]
         normal_reasoning_text = self.tok.decode(normal_ids, skip_special_tokens=False)
         
         cut = pivot_token if pivot_token is not None else sent_start

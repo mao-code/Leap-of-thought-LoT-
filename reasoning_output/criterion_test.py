@@ -15,6 +15,7 @@ import json
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run a few examples with LoT-2")
     parser.add_argument("--model", type=str, required=True)
+    parser.add_argument("--dataset", type=str, default="DaertML/gsm8k-jsonl")
     parser.add_argument("--num_samples", type=int, default=5,
                         help="How many GSM8K samples to run")
     parser.add_argument("--fewshot", action="store_true",
@@ -23,13 +24,13 @@ def main() -> None:
 
     set_seed()
     loader = GSM8KLoader(split="train", num_samples=args.num_samples)
-    gen = LeapGenerator(parser.model)
+    gen = LeapGenerator(args.model)
     tok = gen.tok
 
-    correct_first = 0
-    correct_final = 0
-    sum_tok_first = 0
-    sum_tok_final = 0
+    correct_normal = 0
+    correct_leap = 0
+    sum_tok_normal = 0
+    sum_tok_leap = 0
     records = []
 
     for sample in tqdm(loader, total=args.num_samples, desc="Evaluating"):
@@ -69,6 +70,8 @@ def main() -> None:
             "is_correct_leap": is_correct_leap,
             "tok_normal": tok_normal,
             "tok_leap": tok_leap,
+            "normal_reasoning_text": rec["normal_reasoning_text"],
+            "leap_reasoning_text": rec.get("leap_reasoning_text", ""),
             "pps_trajectory": rec.get("pps_trajectory", []),
             "rwp_trajectory": rec.get("rwp_trajectory", []),
         })
@@ -86,10 +89,10 @@ def main() -> None:
         print("RWP trajectory:", rec.get("rwp_trajectory", []))
 
     n_examples = args.num_samples
-    acc_first = correct_first / n_examples if n_examples > 0 else 0.0
-    acc_final = correct_final / n_examples if n_examples > 0 else 0.0
-    avg_tok_first = sum_tok_first / n_examples if n_examples > 0 else 0.0
-    avg_tok_final = sum_tok_final / n_examples if n_examples > 0 else 0.0
+    acc_first = correct_normal / n_examples if n_examples > 0 else 0.0
+    acc_final = correct_leap / n_examples if n_examples > 0 else 0.0
+    avg_tok_first = sum_tok_normal / n_examples if n_examples > 0 else 0.0
+    avg_tok_final = sum_tok_leap / n_examples if n_examples > 0 else 0.0
 
     print("\n──────────────────────────────────────────────────────")
     print(f"Total examples       : {n_examples}")
@@ -107,6 +110,11 @@ if __name__ == "__main__":
 
     """
     Example usage:
+    
+    dataset: 
+    - DaertML/gsm8k-jsonl (default)
+    - HuggingFaceH4/MATH-500
+
     python -m reasoning_output.criterion_test \
         --model deepseek-ai/DeepSeek-R1-Distill-Qwen-32B \
         --num_samples 3
