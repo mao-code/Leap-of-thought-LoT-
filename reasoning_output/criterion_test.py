@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from tqdm import tqdm
 
-from dataset.gsm8k_loader import GSM8KLoader
+from dataset.gsm8k_loader import GSM8KLoader, Math500Loader
 from reasoning_output.src.generator import LeapGenerator
 from reasoning_output.src.utils import extract_answer, normalize_answer
 from utils import set_seed
@@ -15,7 +15,7 @@ import json
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run a few examples with LoT-2")
     parser.add_argument("--model", type=str, required=True)
-    parser.add_argument("--dataset", type=str, default="DaertML/gsm8k-jsonl")
+    parser.add_argument("--dataset", type=str, default="gsm8k")
     parser.add_argument("--num_samples", type=int, default=5,
                         help="How many GSM8K samples to run")
     parser.add_argument("--fewshot", action="store_true",
@@ -23,7 +23,14 @@ def main() -> None:
     args = parser.parse_args()
 
     set_seed()
-    loader = GSM8KLoader(split="train", num_samples=args.num_samples)
+
+    if args.dataset == "gsm8k":
+        loader = GSM8KLoader(split="train", num_samples=args.num_samples)
+    elif args.dataset == "math500":
+        loader = Math500Loader(num_samples=args.num_samples)
+    else:
+        raise ValueError(f"Unknown dataset: {args.dataset}")
+
     gen = LeapGenerator(args.model)
     tok = gen.tok
 
@@ -112,10 +119,11 @@ if __name__ == "__main__":
     Example usage:
     
     dataset: 
-    - DaertML/gsm8k-jsonl (default)
-    - HuggingFaceH4/MATH-500
+    - gsm8k
+    - math500
 
     python -m reasoning_output.criterion_test \
         --model deepseek-ai/DeepSeek-R1-Distill-Qwen-32B \
+        --dataset math500 \
         --num_samples 3
     """

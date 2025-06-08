@@ -13,12 +13,12 @@ def normalize_answer(ans: str) -> str:
     """Normalize numeric strings for robust comparison."""
     ans = ans.strip().strip(" .,!?")
     ans = ans.lstrip("$€£¥").replace(",", "")
-    if re.fullmatch(r"-?\d+(?:\.\d+)?", ans):
-        try:
-            num = float(ans)
-        except ValueError:
-            return ans
-        if num.is_integer():
-            return str(int(num))
-        ans = ("%f" % num).rstrip("0").rstrip(".")
+    # if re.fullmatch(r"-?\d+(?:\.\d+)?", ans):
+    #     try:
+    #         num = float(ans)
+    #     except ValueError:
+    #         return ans
+    #     if num.is_integer():
+    #         return str(int(num))
+    #     ans = ("%f" % num).rstrip("0").rstrip(".")
     return ans
