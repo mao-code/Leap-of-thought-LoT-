@@ -6,7 +6,6 @@ This project explores **Leap‑of‑Thought** reasoning with language models.  A
 - `input_prompt/` – utilities for LoT‑1 style prompt experiments
 - `reasoning_output/` – implementation of LoT‑2 with reasoning‑wise perplexity (RWP)
 - `dataset/` – small helpers to stream GSM8K examples
-- `model_provider.py` – wraps local HuggingFace models or OpenAI‑compatible APIs
 - `config.py` – runtime settings
 
 ## Quick sanity check

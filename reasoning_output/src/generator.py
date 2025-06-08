@@ -16,9 +16,6 @@ from input_prompt.src.prompt_engine import build_plain_prompt
 import math
 from reasoning_output.src.perplexity import sentence_perplexity
 
-from model_provider import get_model, BaseModel
-
-
 class LeapGenerator:
     """Generate baseline reasoning and optionally a leap extension."""
 
@@ -72,6 +69,7 @@ class LeapGenerator:
             text_piece = self.tok.decode(gen_ids[sent_start:], skip_special_tokens=False)
             if text_piece.endswith(('.', '!', '?')):
                 sent = text_piece
+
                 pp = sentence_perplexity(sent, context, self.base_model)
                 pps.append(pp)
                 context += sent + " "
@@ -101,7 +99,7 @@ class LeapGenerator:
         last_logits = out.logits[:, -1, :]
 
         # --- inject leap and continue generation ---
-        leap_text = "<leap>I have a new idea to make it quick and clever. "
+        leap_text = "<leap>Aha! I have a new idea to make it quick and clever. "
         leap_ids = self.tok(leap_text, add_special_tokens=False).input_ids
         leap_tensor = torch.tensor([leap_ids], device=self.device)
         out = self.mdl(input_ids=leap_tensor, past_key_values=cache, use_cache=True)

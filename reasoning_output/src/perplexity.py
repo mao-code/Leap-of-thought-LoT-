@@ -5,8 +5,6 @@ import math
 import re
 from typing import List
 
-from model_provider import BaseModel
-
 __all__ = [
     "split_sentences",
     "sentence_perplexity",
