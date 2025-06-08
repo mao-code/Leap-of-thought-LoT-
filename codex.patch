@@ -1,0 +1,425 @@
+diff --git a/reasoning_output/criterion_test.py b/reasoning_output/criterion_test.py
+index 0015cb58471eb0927c92cd1408aa3f475d5e91cc..ea6763dd2488b298f32373160eb1206023f9ccb4 100644
+--- a/reasoning_output/criterion_test.py
++++ b/reasoning_output/criterion_test.py
+@@ -1,61 +1,102 @@
+ from __future__ import annotations
+ 
+ """Demo script exercising the RWP-based leap insertion pipeline (LoT-2)."""
+ 
+ import argparse
+ from tqdm import tqdm
+ 
+ from dataset.gsm8k_loader import GSM8KLoader
+ from reasoning_output.src.generator import LeapGenerator
+ from reasoning_output.src.utils import extract_answer, normalize_answer
+ from utils import set_seed
++import json
+ 
+ 
+ def main() -> None:
+     parser = argparse.ArgumentParser(description="Run a few examples with LoT-2")
+     parser.add_argument("--num_samples", type=int, default=5,
+                         help="How many GSM8K samples to run")
+     parser.add_argument("--fewshot", action="store_true",
+                         help="Use few-shot prompting")
+     args = parser.parse_args()
+ 
+     set_seed()
+     loader = GSM8KLoader(split="train", num_samples=args.num_samples)
+     gen = LeapGenerator()
++    tok = gen.tok
+ 
+     correct_first = 0
+     correct_final = 0
++    sum_tok_first = 0
++    sum_tok_final = 0
++    records = []
+ 
+     for sample in tqdm(loader, total=args.num_samples, desc="Evaluating"):
+         q = sample["question"]
+         gold = sample["answers"]
++
+         rec = gen.generate(q, fewshot=args.fewshot)
+ 
+         ans_first = extract_answer(rec["first_answer"])
+         ans_final = extract_answer(rec.get("leap_answer") or rec["first_answer"])
+ 
+         norm_first = normalize_answer(ans_first)
+         norm_final = normalize_answer(ans_final)
+         norm_gold = [normalize_answer(a) for a in gold]
+ 
+-        if any(norm_first.lower() == g.lower() for g in norm_gold):
++        is_correct_first = any(norm_first.lower() == g.lower() for g in norm_gold)
++        is_correct_final = any(norm_final.lower() == g.lower() for g in norm_gold)
++
++        tok_first = len(tok(rec["first_answer"]).input_ids)
++        tok_final = len(tok(rec.get("leap_answer") or rec["first_answer"]).input_ids)
++
++        if is_correct_first:
+             correct_first += 1
+-        if any(norm_final.lower() == g.lower() for g in norm_gold):
++        if is_correct_final:
+             correct_final += 1
++        sum_tok_first += tok_first
++        sum_tok_final += tok_final
++
++        records.append({
++            "question": q,
++            "gold_answers": gold,
++            "ans_first": ans_first,
++            "ans_final": ans_final,
++            "norm_first": norm_first,
++            "norm_final": norm_final,
++            "correct_first": is_correct_first,
++            "correct_final": is_correct_final,
++            "tokens_first": tok_first,
++            "tokens_final": tok_final,
++            "rwp_trajectory": rec.get("rwp_trajectory", []),
++        })
+ 
+         print("\n" + "=" * 80)
+         print("Question:", q)
+         print("\nFirst pass:\n", rec["first_answer"])
+         if rec["trigger_leap"]:
+             print("\nLeap pass:\n", rec.get("leap_answer", ""))
+         else:
+             print("\nNo leap triggered.")
+         print("Predicted answer:", ans_final)
++        print("RWP trajectory:", rec.get("rwp_trajectory", []))
++
++    n_examples = args.num_samples
++    acc_first = correct_first / n_examples if n_examples > 0 else 0.0
++    acc_final = correct_final / n_examples if n_examples > 0 else 0.0
++    avg_tok_first = sum_tok_first / n_examples if n_examples > 0 else 0.0
++    avg_tok_final = sum_tok_final / n_examples if n_examples > 0 else 0.0
++
++    print("\n──────────────────────────────────────────────────────")
++    print(f"Total examples       : {n_examples}")
++    print(f"First pass reasoning : Accuracy = {acc_first:.2%},  Avg Tokens = {avg_tok_first:.1f}")
++    print(f"Final reasoning      : Accuracy = {acc_final:.2%},  Avg Tokens = {avg_tok_final:.1f}")
++    print("──────────────────────────────────────────────────────")
+ 
+-    total = args.num_samples
+-    print("\nAccuracy without leap:", correct_first / total if total else 0)
+-    print("Accuracy with leap:", correct_final / total if total else 0)
++    with open("criterion_eval.jsonl", "w", encoding="utf-8") as outf:
++        for rec in records:
++            outf.write(json.dumps(rec, ensure_ascii=False) + "\n")
+ 
+ 
+ if __name__ == "__main__":
+     main()
+diff --git a/reasoning_output/src/base_model.py b/reasoning_output/src/base_model.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..068a25a4be7dd34760345c3e78db07e202b993f6
+--- /dev/null
++++ b/reasoning_output/src/base_model.py
+@@ -0,0 +1,59 @@
++from __future__ import annotations
++
++"""Minimal local model wrapper used for LoT reasoning."""
++
++import torch
++import torch.nn.functional as F
++from transformers import AutoModelForCausalLM, AutoTokenizer
++
++from config import settings
++
++
++class BaseModel:
++    """Simple HuggingFace causal LM wrapper with log-prob utilities."""
++
++    def __init__(self) -> None:
++        self.tokenizer = AutoTokenizer.from_pretrained(settings.model_name, use_fast=True)
++        special = ["<leap>", "</leap>"]
++        added = self.tokenizer.add_special_tokens({"additional_special_tokens": special})
++
++        dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
++        self.model = AutoModelForCausalLM.from_pretrained(
++            settings.model_name,
++            torch_dtype=dtype,
++            device_map="auto",
++            use_cache=True,
++        )
++        if added > 0:
++            self.model.resize_token_embeddings(len(self.tokenizer))
++        self.device = next(self.model.parameters()).device
++        self.model.eval()
++
++    @torch.inference_mode()
++    def sentence_logprobs(self, sentence: str, *, context: str = "") -> list[float]:
++        """Return token log-probabilities for ``sentence`` given ``context``."""
++        text = context + sentence
++        input_ids = self.tokenizer(text, return_tensors="pt").input_ids.to(self.device)
++        offset = len(self.tokenizer(context, return_tensors="pt").input_ids[0])
++
++        out = self.model(input_ids)
++        logits = out.logits
++
++        log_probs = []
++        for i in range(offset, input_ids.size(1)):
++            token_id = int(input_ids[0, i])
++            token_logits = logits[0, i - 1]
++            log_prob = F.log_softmax(token_logits, dim=-1)[token_id].item()
++            log_probs.append(log_prob)
++        return log_probs
++
++
++_model: BaseModel | None = None
++
++
++def get_model() -> BaseModel:
++    """Return a singleton :class:`BaseModel` instance."""
++    global _model
++    if _model is None:
++        _model = BaseModel()
++    return _model
+diff --git a/reasoning_output/src/criteria.py b/reasoning_output/src/criteria.py
+index 5bd0f2fb1f7d059eb4a158a1ea2e58194d87fbdc..c302b1804758de9e485768162b06dd3541f194bf 100644
+--- a/reasoning_output/src/criteria.py
++++ b/reasoning_output/src/criteria.py
+@@ -1,11 +1,13 @@
+ """Criterion deciding whether to inject <leap>…</leap>."""
+ from __future__ import annotations
+ 
+ from config import settings
+-from reasoning_output.src.perplexity import split_sentences, reasoning_wise_perplexity
++from reasoning_output.src.perplexity import rwp_from_pp
+ 
+-def should_trigger_leap(rationale: str, model: BaseModel) -> bool:
+-    """Return **True** if RWP exceeds the configured threshold."""
+-    sentences = split_sentences(rationale)
+-    rwp = reasoning_wise_perplexity(sentences, model)
++
++def should_trigger_leap(pps: list[float]) -> bool:
++    """Return **True** if the sliding-window RWP exceeds the threshold."""
++    window = settings.window
++    sub = pps[-window:]
++    rwp = rwp_from_pp(sub)
+     return rwp >= settings.rwp_threshold
+\ No newline at end of file
+diff --git a/reasoning_output/src/generator.py b/reasoning_output/src/generator.py
+index c91d86cc71e475f728a654710e65f6f12c39769b..7ccd4eeb975f1713bb228e00fc57cab774157d62 100644
+--- a/reasoning_output/src/generator.py
++++ b/reasoning_output/src/generator.py
+@@ -1,129 +1,132 @@
+ from __future__ import annotations
+ 
+ """Generation utilities for LoT-2 using a token-by-token loop."""
+ 
+ import json
+ from datetime import datetime
+ from pathlib import Path
+ from typing import List
+ 
+ import torch
+ import torch.nn.functional as F
+ from transformers import AutoModelForCausalLM, AutoTokenizer
+ 
+ from config import settings
+ from input_prompt.src.prompt_engine import build_plain_prompt
+-import math
+-from reasoning_output.src.perplexity import sentence_perplexity
++from reasoning_output.src.perplexity import sentence_pp, rwp_from_pp
++from reasoning_output.src.base_model import BaseModel, get_model
+ 
+ class LeapGenerator:
+     """Generate baseline reasoning and optionally a leap extension."""
+ 
+     def __init__(self):
+         self.base_model: BaseModel = get_model()
+-        if not hasattr(self.base_model, "model"):
+-            raise RuntimeError("LeapGenerator currently requires a local HF model")
+         self.mdl: AutoModelForCausalLM = self.base_model.model
+         self.tok: AutoTokenizer = self.base_model.tokenizer
+-        self.device = next(self.mdl.parameters()).device
++        self.device = self.base_model.device
+ 
+     def _top_p_sample(self, logits: torch.Tensor, temperature: float, top_p: float) -> int:
+         logits = logits / temperature
+         probs = F.softmax(logits, dim=-1)
+         sorted_probs, sorted_idx = torch.sort(probs, descending=True)
+         cumsum = torch.cumsum(sorted_probs, dim=-1)
+         mask = cumsum - sorted_probs > top_p
+         sorted_probs[mask] = 0.0
+         sorted_probs = sorted_probs / sorted_probs.sum()
+         next_token = torch.multinomial(sorted_probs, 1)
+         return sorted_idx[next_token].item()
+ 
+ 
+     def generate(self, question: str, fewshot: bool = False) -> dict:
+         """Generate reasoning and dynamically insert a <leap> once RWP is high."""
+ 
+         prompt = build_plain_prompt(question=question, fewshot=fewshot, leap=True)
+         prompt_ids = self.tok(prompt, return_tensors="pt", add_special_tokens=True).input_ids.to(self.device)
+ 
+         # --- first pass: generate until RWP exceeds threshold ---
+         out = self.mdl(input_ids=prompt_ids, use_cache=True)
+         cache = out.past_key_values
+         last_logits = out.logits[:, -1, :]
+ 
+         gen_ids: List[int] = []
+         sent_start = 0
+-        context = ""
+         pps: List[float] = []
++        rwps: List[float] = []
++        cur_logps: List[float] = []
+         pivot_token = None
+ 
+         for _ in range(settings.max_tokens):
+             nxt = self._top_p_sample(last_logits[0], settings.temperature, 0.9)
++            logp = F.log_softmax(last_logits[0], dim=-1)[nxt].item()
+             if nxt == self.tok.eos_token_id:
+                 break
+             gen_ids.append(nxt)
++            cur_logps.append(logp)
+             nxt_tensor = torch.tensor([[nxt]], device=self.device)
+             out = self.mdl(input_ids=nxt_tensor, past_key_values=cache, use_cache=True)
+             cache = out.past_key_values
+             last_logits = out.logits[:, -1, :]
+ 
+             text_piece = self.tok.decode(gen_ids[sent_start:], skip_special_tokens=False)
+-            if text_piece.endswith(('.', '!', '?')):
+-                sent = text_piece
+-
+-                pp = sentence_perplexity(sent, context, self.base_model)
++            if text_piece.endswith((".", "!", "?")):
++                pp = sentence_pp(cur_logps)
+                 pps.append(pp)
+-                context += sent + " "
+                 sent_start = len(gen_ids)
++                cur_logps = []
+                 window = pps[-settings.window:]
+-                rwp = math.prod(window) ** (1 / len(window))
++                rwp = rwp_from_pp(window)
++                rwps.append(rwp)
+                 if rwp >= settings.rwp_threshold:
+-                    pivot_token = len(gen_ids) - len(self.tok(sent, add_special_tokens=False).input_ids)
++                    pivot_token = sent_start - len(self.tok(text_piece, add_special_tokens=False).input_ids)
+                     break
+ 
+-        normal_ids = gen_ids[:sent_start]
++        cut = pivot_token if pivot_token is not None else sent_start
++        normal_ids = gen_ids[:cut]
+         normal_text = self.tok.decode(normal_ids, skip_special_tokens=False)
+ 
+         record = {
+             "question": question,
+             "first_answer": normal_text,
+             "trigger_leap": pivot_token is not None,
++            "rwp_trajectory": rwps,
+         }
+         if pivot_token is None:
+             return record
+ 
+         # --- run model up to prefix ---
+         prefix_ids = prompt_ids[0].tolist() + normal_ids
+         prefix_tensor = torch.tensor([prefix_ids], device=self.device)
+         out = self.mdl(input_ids=prefix_tensor, use_cache=True)
+         cache = out.past_key_values
+         last_logits = out.logits[:, -1, :]
+ 
+         # --- inject leap and continue generation ---
+         leap_text = "<leap>Aha! I have a new idea to make it quick and clever. "
+         leap_ids = self.tok(leap_text, add_special_tokens=False).input_ids
+         leap_tensor = torch.tensor([leap_ids], device=self.device)
+         out = self.mdl(input_ids=leap_tensor, past_key_values=cache, use_cache=True)
+         cache = out.past_key_values
+         last_logits = out.logits[:, -1, :]
+ 
+         lot_ids: List[int] = []
+         for _ in range(settings.max_tokens - len(prefix_ids)):
+             nxt = self._top_p_sample(last_logits[0], settings.temperature, 0.9)
+             if nxt == self.tok.eos_token_id:
+                 break
+             lot_ids.append(nxt)
+             new_tensor = torch.tensor([[nxt]], device=self.device)
+             out = self.mdl(input_ids=new_tensor, past_key_values=cache, use_cache=True)
+             cache = out.past_key_values
+             last_logits = out.logits[:, -1, :]
+ 
+         lot_text = normal_text + leap_text + self.tok.decode(lot_ids, skip_special_tokens=False)
+         record["leap_answer"] = lot_text
+         return record
+ 
+ 
+ def dump_record(rec: dict) -> None:
+     ts = datetime.utcnow().isoformat()
+     out_path = Path(settings.log_dir) / "reasoning_records.jsonl"
+     with out_path.open("a", encoding="utf-8") as f:
+         f.write(json.dumps({"ts": ts, **rec}) + "\n")
++
+diff --git a/reasoning_output/src/perplexity.py b/reasoning_output/src/perplexity.py
+index 887c7cfb7d3a03cb3e1e5291edb13b8bbbdcb386..7644a1420d3e9d8b3f101c46fa91bf38e7710474 100644
+--- a/reasoning_output/src/perplexity.py
++++ b/reasoning_output/src/perplexity.py
+@@ -1,53 +1,47 @@
+ """Reasoningswise perplexity (RWP) utilities."""
+ from __future__ import annotations
+ 
+ import math
+ import re
+ from typing import List
+ 
+ __all__ = [
+     "split_sentences",
+-    "sentence_perplexity",
+-    "reasoning_wise_perplexity",
++    "sentence_pp",
++    "rwp_from_pp",
+     "sliding_rwp",
+ ]
+ 
+ # ── Sentence segmentation (one sentence == one reasoning step) ───────────────
+ _SENT_RE = re.compile(r"(?<=[.!?])\s+")
+ 
+ def split_sentences(text: str) -> List[str]:
+     """Very naïve rule-based segmentor.  Feel free to plug your own."""
+     return [s.strip() for s in _SENT_RE.split(text.strip()) if s.strip()]
+ 
+ 
+ # ── PP_k  &  RWP computations ───────────────────────────────────────────────
+-def sentence_perplexity(sentence: str, context: str, model: BaseModel) -> float:
+-    """PP_k  (equation 1).  Uses *log* e and def‑n provided by user."""
+-    log_probs = model.sentence_logprobs(sentence, context=context)
++def sentence_pp(log_probs: List[float]) -> float:
++    """PP_k  (equation 1) computed from token log-probabilities."""
+     if not log_probs:
+         return float("inf")
+     avg_neg_logp = -sum(log_probs) / len(log_probs)
+     return math.exp(avg_neg_logp)
+ 
+ 
+-def reasoning_wise_perplexity(sentences: List[str], model: BaseModel) -> float:
+-    """RWP  (equation 2)."""
+-    pps = []
+-    ctx = ""
+-    for sent in sentences:
+-        pp = sentence_perplexity(sent, ctx, model)
+-        pps.append(pp)
+-        ctx += sent + " "  # accumulate context for causal models
+-    # Geometric mean
++def rwp_from_pp(pps: List[float]) -> float:
++    """RWP  (equation 2) given the list of PP_k."""
++    if not pps:
++        return float("inf")
+     product = math.prod(pps)
+-    return product ** (1 / len(pps)) if pps else float("inf")
++    return product ** (1 / len(pps))
+ 
+ 
+-def sliding_rwp(sentences: List[str], window: int, model: BaseModel) -> List[float]:
+-    """Compute RWP^{(w)} for each window ending at t (eq. 3)."""
++def sliding_rwp(pps: List[float], window: int) -> List[float]:
++    """Compute RWP^{(w)} for a sliding window of PP_k values (eq. 3)."""
+     rwps = []
+-    for t in range(len(sentences)):
++    for t in range(len(pps)):
+         start = max(0, t - window + 1)
+-        sub = sentences[start : t + 1]
+-        rwps.append(reasoning_wise_perplexity(sub, model))
++        sub = pps[start : t + 1]
++        rwps.append(rwp_from_pp(sub))
+     return rwps
+\ No newline at end of file
