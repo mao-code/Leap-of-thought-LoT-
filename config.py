@@ -42,7 +42,7 @@ class Settings(BaseSettings):
 
     # ── RWP‑criterion hyper‑parameters ───────────────────────────────────────
     rwp_threshold: float = Field(50.0, env="LOT_RWP_THRESHOLD")
-    window: int = Field(3, env="LOT_RWP_WINDOW", description="Sliding-window for RWP^{(w)}")
+    window: int = Field(10, env="LOT_RWP_WINDOW", description="Sliding-window for RWP^{(w)}")
 
     class Config:
         env_file = ".env"

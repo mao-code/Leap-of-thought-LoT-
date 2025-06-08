@@ -13,19 +13,18 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from config import settings
 from input_prompt.src.prompt_engine import build_plain_prompt
-import math
-from reasoning_output.src.perplexity import sentence_perplexity
+from reasoning_output.src.perplexity import sentence_pp, rwp_from_pp
+from reasoning_output.src.base_model import BaseModel, get_model
+from reasoning_output.src.criteria import should_trigger_leap
 
 class LeapGenerator:
     """Generate baseline reasoning and optionally a leap extension."""
 
     def __init__(self):
         self.base_model: BaseModel = get_model()
-        if not hasattr(self.base_model, "model"):
-            raise RuntimeError("LeapGenerator currently requires a local HF model")
         self.mdl: AutoModelForCausalLM = self.base_model.model
         self.tok: AutoTokenizer = self.base_model.tokenizer
-        self.device = next(self.mdl.parameters()).device
+        self.device = self.base_model.device
 
     def _top_p_sample(self, logits: torch.Tensor, temperature: float, top_p: float) -> int:
         logits = logits / temperature
@@ -39,7 +38,7 @@ class LeapGenerator:
         return sorted_idx[next_token].item()
 
 
-    def generate(self, question: str, fewshot: bool = False) -> dict:
+    def generate(self, question: str, fewshot: bool = False, use_window_rwp=False) -> dict:
         """Generate reasoning and dynamically insert a <leap> once RWP is high."""
 
         prompt = build_plain_prompt(question=question, fewshot=fewshot, leap=True)
@@ -52,51 +51,57 @@ class LeapGenerator:
 
         gen_ids: List[int] = []
         sent_start = 0
-        context = ""
         pps: List[float] = []
+        rwps: List[float] = []
+        cur_logps: List[float] = []
         pivot_token = None
 
         for _ in range(settings.max_tokens):
             nxt = self._top_p_sample(last_logits[0], settings.temperature, 0.9)
+            logp = F.log_softmax(last_logits[0], dim=-1)[nxt].item()
             if nxt == self.tok.eos_token_id:
                 break
             gen_ids.append(nxt)
+            cur_logps.append(logp)
             nxt_tensor = torch.tensor([[nxt]], device=self.device)
             out = self.mdl(input_ids=nxt_tensor, past_key_values=cache, use_cache=True)
             cache = out.past_key_values
             last_logits = out.logits[:, -1, :]
 
             text_piece = self.tok.decode(gen_ids[sent_start:], skip_special_tokens=False)
-            if text_piece.endswith(('.', '!', '?')):
-                sent = text_piece
-
-                pp = sentence_perplexity(sent, context, self.base_model)
+            if text_piece.endswith((".", "!", "?")):
+                pp = sentence_pp(cur_logps)
                 pps.append(pp)
-                context += sent + " "
                 sent_start = len(gen_ids)
-                window = pps[-settings.window:]
-                rwp = math.prod(window) ** (1 / len(window))
-                if rwp >= settings.rwp_threshold:
-                    pivot_token = len(gen_ids) - len(self.tok(sent, add_special_tokens=False).input_ids)
-                    break
+                cur_logps = []
 
-        normal_ids = gen_ids[:sent_start]
-        normal_text = self.tok.decode(normal_ids, skip_special_tokens=False)
+                should_leap, rwp =  should_trigger_leap(pps, use_window_rwp)
+                rwps.append(rwp)
+                if should_leap:
+                    pivot_token = sent_start - len(self.tok(text_piece, add_special_tokens=False).input_ids)
+                    
+        normal_ids = gen_ids[...]
+        normal_reasoning_text = self.tok.decode(normal_ids, skip_special_tokens=False)
+        
+        cut = pivot_token if pivot_token is not None else sent_start
+        normal_ids_cut = gen_ids[:cut]
+        normal_reasoning_cut_text = self.tok.decode(normal_ids_cut, skip_special_tokens=False)
 
         record = {
             "question": question,
-            "first_answer": normal_text,
+            "normal_reasoning_text": normal_reasoning_text,
             "trigger_leap": pivot_token is not None,
+            "leap_from_sentence": text_piece,
+            "pps_trajectory": pps,
+            "rwp_trajectory": rwps,
         }
         if pivot_token is None:
             return record
 
         # --- run model up to prefix ---
-        prefix_ids = prompt_ids[0].tolist() + normal_ids
-        prefix_tensor = torch.tensor([prefix_ids], device=self.device)
-        out = self.mdl(input_ids=prefix_tensor, use_cache=True)
-        cache = out.past_key_values
-        last_logits = out.logits[:, -1, :]
+        prefix_ids = prompt_ids[0].tolist() + normal_ids_cut
+        keep_prefix_len = len(prefix_ids)
+        cache.crop(keep_prefix_len)
 
         # --- inject leap and continue generation ---
         leap_text = "<leap>Aha! I have a new idea to make it quick and clever. "
@@ -117,8 +122,9 @@ class LeapGenerator:
             cache = out.past_key_values
             last_logits = out.logits[:, -1, :]
 
-        lot_text = normal_text + leap_text + self.tok.decode(lot_ids, skip_special_tokens=False)
-        record["leap_answer"] = lot_text
+        lot_text = normal_reasoning_cut_text + leap_text + self.tok.decode(lot_ids, skip_special_tokens=False)
+        record["leap_reasoning_text"] = lot_text
+
         return record
 
 
@@ -127,3 +133,4 @@ def dump_record(rec: dict) -> None:
     out_path = Path(settings.log_dir) / "reasoning_records.jsonl"
     with out_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps({"ts": ts, **rec}) + "\n")
+

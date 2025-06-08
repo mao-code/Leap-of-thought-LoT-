@@ -9,6 +9,7 @@ from dataset.gsm8k_loader import GSM8KLoader
 from reasoning_output.src.generator import LeapGenerator
 from reasoning_output.src.utils import extract_answer, normalize_answer
 from utils import set_seed
+import json
 
 
 def main() -> None:
@@ -22,39 +23,82 @@ def main() -> None:
     set_seed()
     loader = GSM8KLoader(split="train", num_samples=args.num_samples)
     gen = LeapGenerator()
+    tok = gen.tok
 
     correct_first = 0
     correct_final = 0
+    sum_tok_first = 0
+    sum_tok_final = 0
+    records = []
 
     for sample in tqdm(loader, total=args.num_samples, desc="Evaluating"):
         q = sample["question"]
         gold = sample["answers"]
+
         rec = gen.generate(q, fewshot=args.fewshot)
 
-        ans_first = extract_answer(rec["first_answer"])
-        ans_final = extract_answer(rec.get("leap_answer") or rec["first_answer"])
+        ans_normal = extract_answer(rec["normal_reasoning_text"])
+        ans_leap = extract_answer(rec.get("leap_reasoning_text") or rec["normal_reasoning_text"])
 
-        norm_first = normalize_answer(ans_first)
-        norm_final = normalize_answer(ans_final)
-        norm_gold = [normalize_answer(a) for a in gold]
+        norm_ans_normal = normalize_answer(ans_normal)
+        norm_ans_leap = normalize_answer(ans_leap)
+        norm_ans_gold = [normalize_answer(a) for a in gold]
 
-        if any(norm_first.lower() == g.lower() for g in norm_gold):
-            correct_first += 1
-        if any(norm_final.lower() == g.lower() for g in norm_gold):
-            correct_final += 1
+        is_correct_normal = any(norm_ans_normal.lower() == g.lower() for g in norm_ans_gold)
+        is_correct_leap = any(norm_ans_leap.lower() == g.lower() for g in norm_ans_gold)
+
+        tok_normal = len(tok(rec["normal_reasoning_text"]).input_ids)
+        tok_leap = len(tok(rec.get("leap_reasoning_text") or rec["normal_reasoning_text"]).input_ids)
+
+        if is_correct_normal:
+            correct_normal += 1
+        if is_correct_leap:
+            correct_leap += 1
+        sum_tok_normal += tok_normal
+        sum_tok_leap += tok_leap
+
+        records.append({
+            "question": q,
+            "norm_ans_gold": norm_ans_gold,
+            # "ans_normal": ans_normal,
+            # "ans_leap": ans_leap,
+            "norm_ans_normal": norm_ans_normal,
+            "norm_ans_leap": norm_ans_leap,
+            "is_correct_normal": is_correct_normal,
+            "is_correct_leap": is_correct_leap,
+            "tok_normal": tok_normal,
+            "tok_leap": tok_leap,
+            "pps_trajectory": rec.get("pps_trajectory", []),
+            "rwp_trajectory": rec.get("rwp_trajectory", []),
+        })
 
         print("\n" + "=" * 80)
         print("Question:", q)
-        print("\nFirst pass:\n", rec["first_answer"])
+        print("\nFirst pass:\n", rec["normal_reasoning_text"])
         if rec["trigger_leap"]:
-            print("\nLeap pass:\n", rec.get("leap_answer", ""))
+            print("\nLeap pass:\n", rec.get("normal_reasoning_cut_text", ""))
         else:
             print("\nNo leap triggered.")
-        print("Predicted answer:", ans_final)
+        print("Predicted answer:", norm_ans_leap)
 
-    total = args.num_samples
-    print("\nAccuracy without leap:", correct_first / total if total else 0)
-    print("Accuracy with leap:", correct_final / total if total else 0)
+        print("PPs trajectory:", rec.get("pps_trajectory", []))
+        print("RWP trajectory:", rec.get("rwp_trajectory", []))
+
+    n_examples = args.num_samples
+    acc_first = correct_first / n_examples if n_examples > 0 else 0.0
+    acc_final = correct_final / n_examples if n_examples > 0 else 0.0
+    avg_tok_first = sum_tok_first / n_examples if n_examples > 0 else 0.0
+    avg_tok_final = sum_tok_final / n_examples if n_examples > 0 else 0.0
+
+    print("\n──────────────────────────────────────────────────────")
+    print(f"Total examples       : {n_examples}")
+    print(f"First pass reasoning : Accuracy = {acc_first:.2%},  Avg Tokens = {avg_tok_first:.1f}")
+    print(f"Final reasoning      : Accuracy = {acc_final:.2%},  Avg Tokens = {avg_tok_final:.1f}")
+    print("──────────────────────────────────────────────────────")
+
+    with open("criterion_eval.jsonl", "w", encoding="utf-8") as outf:
+        for rec in records:
+            outf.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
 
 if __name__ == "__main__":
