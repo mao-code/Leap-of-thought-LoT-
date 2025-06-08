@@ -14,6 +14,7 @@ import json
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run a few examples with LoT-2")
+    parser.add_argument("--model", type=str, required=True)
     parser.add_argument("--num_samples", type=int, default=5,
                         help="How many GSM8K samples to run")
     parser.add_argument("--fewshot", action="store_true",
@@ -22,7 +23,7 @@ def main() -> None:
 
     set_seed()
     loader = GSM8KLoader(split="train", num_samples=args.num_samples)
-    gen = LeapGenerator()
+    gen = LeapGenerator(parser.model)
     tok = gen.tok
 
     correct_first = 0
@@ -103,3 +104,10 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+    """
+    Example usage:
+    python -m reasoning_output.criterion_test \
+        --model deepseek-ai/DeepSeek-R1-Distill-Qwen-32B \
+        --num_samples 3
+    """

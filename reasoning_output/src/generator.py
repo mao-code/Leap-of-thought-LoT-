@@ -14,17 +14,47 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from config import settings
 from input_prompt.src.prompt_engine import build_plain_prompt
 from reasoning_output.src.perplexity import sentence_pp, rwp_from_pp
-from reasoning_output.src.base_model import BaseModel, get_model
 from reasoning_output.src.criteria import should_trigger_leap
+
+DEVICE = None  # will be set once the model is loaded
+DTYPE  = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+
+def load_model(repo_or_path: str):
+    """
+    Load tokenizer and model from Hugging Face, add <leap> tokens.
+    """
+    global DEVICE
+
+    # Load tokenizer, add special <leap> tokens if not present
+    tok = AutoTokenizer.from_pretrained(repo_or_path, use_fast=True)
+    SPECIAL_TOKENS = ["<leap>", "</leap>"]
+    added = tok.add_special_tokens({"additional_special_tokens": SPECIAL_TOKENS})
+
+    # Load model with device_map="auto" for multi-GPU/CPU support
+    mdl = AutoModelForCausalLM.from_pretrained(
+        repo_or_path,
+        torch_dtype=DTYPE,
+        device_map="auto",
+        use_cache=True,
+    )
+
+    # Resize embeddings if new tokens were added
+    if added > 0:
+        mdl.resize_token_embeddings(len(tok))
+
+    # Set main device based on model parameters
+    DEVICE = next(mdl.parameters()).device
+
+    return tok, mdl
+
 
 class LeapGenerator:
     """Generate baseline reasoning and optionally a leap extension."""
 
-    def __init__(self):
-        self.base_model: BaseModel = get_model()
-        self.mdl: AutoModelForCausalLM = self.base_model.model
-        self.tok: AutoTokenizer = self.base_model.tokenizer
-        self.device = self.base_model.device
+    def __init__(self, model_name):
+        self.model_name = model_name
+        self.tok, self.mdl = load_model(model_name)
+        self.device = self.mdl.device
 
     def _top_p_sample(self, logits: torch.Tensor, temperature: float, top_p: float) -> int:
         logits = logits / temperature
