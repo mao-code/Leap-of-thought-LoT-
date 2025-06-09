@@ -106,6 +106,10 @@ class LeapGenerator:
                 cur_logps = []
 
                 should_leap, rwp =  should_trigger_leap(pps, use_window_rwp)
+
+                # Budget Control Scheme
+                should_leap = len(gen_ids) > 256
+                
                 rwps.append(rwp)
                 if should_leap:
                     pivot_token = sent_start - len(self.tok(text_piece, add_special_tokens=False).input_ids)
