@@ -5,9 +5,11 @@ from __future__ import annotations
 import argparse
 from tqdm import tqdm
 
-from dataset.gsm8k_loader import GSM8KLoader, Math500Loader
+from dataset.gsm8k_loader import GSM8KLoader
+from dataset.math500_loader import MATH500Loader
 from reasoning_output.src.generator import LeapGenerator
-from reasoning_output.src.utils import extract_answer, normalize_answer
+from reasoning_output.src.utils import extract_answer     
+from dataset.answer_normaliser import normalise as normalize_answer   
 from utils import set_seed
 import json
 
@@ -27,7 +29,7 @@ def main() -> None:
     if args.dataset == "gsm8k":
         loader = GSM8KLoader(split="train", num_samples=args.num_samples)
     elif args.dataset == "math500":
-        loader = Math500Loader(num_samples=args.num_samples)
+        loader = MATH500Loader(num_samples=args.num_samples)
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")
 

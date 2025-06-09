@@ -9,3 +9,4 @@ torch
 transformers
 accelerate
 datasets
+sympy

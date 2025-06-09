@@ -19,7 +19,7 @@ import re
 from typing import Iterator, List, Optional
 
 from datasets import load_dataset
-
+from dataset.answer_normaliser import normalise as norm_ans 
 
 _BOX_RE = re.compile(r"\\boxed\s*{([^}]*)}")   # matches \boxed{...}
 
@@ -48,26 +48,7 @@ class MATH500Loader:
     #  Helpers
     # --------------------------------------------------------------------- #
     def _clean_answer(self, raw: str) -> str:
-        """
-        Strip whitespace, surrounding $...$, and \\boxed{…} wrappers.
-
-        Returns
-        -------
-        str
-            Normalised short answer string.
-        """
-        raw = raw.strip()
-
-        # Remove leading/trailing inline-math dollars
-        if raw.startswith("$") and raw.endswith("$"):
-            raw = raw[1:-1].strip()
-
-        # Unwrap \boxed{...} if present
-        m = _BOX_RE.fullmatch(raw)
-        if m:
-            raw = m.group(1).strip()
-
-        return raw
+        return norm_ans(raw)
 
     # --------------------------------------------------------------------- #
     #  Python iterator protocol
