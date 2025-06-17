@@ -18,6 +18,7 @@ from reasoning_output.src.criteria import should_trigger_leap
 
 DEVICE = None  # will be set once the model is loaded
 DTYPE  = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+LEAP_HINT = "<leap>Aha! I have a new idea to make it quick and clever. "
 
 def load_model(repo_or_path: str):
     """
@@ -85,6 +86,7 @@ class LeapGenerator:
         rwps: List[float] = []
         cur_logps: List[float] = []
         pivot_token = None
+        has_leaped = False
 
         for _ in range(settings.max_tokens):
             nxt = self._top_p_sample(last_logits[0], settings.temperature, 0.9)
@@ -99,20 +101,22 @@ class LeapGenerator:
             last_logits = out.logits[:, -1, :]
 
             text_piece = self.tok.decode(gen_ids[sent_start:], skip_special_tokens=False)
-            if text_piece.endswith((".", "!", "?")):
+            if text_piece.endswith((".", "!", "?")) and not has_leaped:
                 pp = sentence_pp(cur_logps)
                 pps.append(pp)
                 sent_start = len(gen_ids)
                 cur_logps = []
 
+                # RWP scheme
                 should_leap, rwp =  should_trigger_leap(pps, use_window_rwp)
 
                 # Budget Control Scheme
-                should_leap = len(gen_ids) > 256
-                
+                should_leap = len(gen_ids) > 64
+
                 rwps.append(rwp)
                 if should_leap:
                     pivot_token = sent_start - len(self.tok(text_piece, add_special_tokens=False).input_ids)
+                    has_leaped = True
                     
         normal_ids = gen_ids[:]
         normal_reasoning_text = self.tok.decode(normal_ids, skip_special_tokens=False)
@@ -138,7 +142,7 @@ class LeapGenerator:
         cache.crop(keep_prefix_len)
 
         # --- inject leap and continue generation ---
-        leap_text = "<leap>Aha! I have a new idea to make it quick and clever. "
+        leap_text = LEAP_HINT
         leap_ids = self.tok(leap_text, add_special_tokens=False).input_ids
         leap_tensor = torch.tensor([leap_ids], device=self.device)
         out = self.mdl(input_ids=leap_tensor, past_key_values=cache, use_cache=True)

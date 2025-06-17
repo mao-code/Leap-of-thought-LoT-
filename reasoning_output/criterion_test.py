@@ -8,8 +8,9 @@ from tqdm import tqdm
 from dataset.gsm8k_loader import GSM8KLoader
 from dataset.math500_loader import MATH500Loader
 from reasoning_output.src.generator import LeapGenerator
-from reasoning_output.src.utils import extract_answer     
-from dataset.answer_normaliser import normalise as normalize_answer   
+from reasoning_output.src.utils import extract_answer  
+from reasoning_output.src.utils import normalize_answer  
+# from dataset.answer_normaliser import normalise as normalize_answer   
 from utils import set_seed
 import json
 
@@ -89,7 +90,7 @@ def main() -> None:
         print("Question:", q)
         print("\nFirst pass:\n", rec["normal_reasoning_text"])
         if rec["trigger_leap"]:
-            print("\nLeap pass:\n", rec.get("normal_reasoning_cut_text", ""))
+            print("\nLeap pass:\n", rec.get("leap_reasoning_text", ""))
         else:
             print("\nNo leap triggered.")
         print("Predicted answer:", norm_ans_leap)
@@ -105,8 +106,8 @@ def main() -> None:
 
     print("\n──────────────────────────────────────────────────────")
     print(f"Total examples       : {n_examples}")
-    print(f"First pass reasoning : Accuracy = {acc_first:.2%},  Avg Tokens = {avg_tok_first:.1f}")
-    print(f"Final reasoning      : Accuracy = {acc_final:.2%},  Avg Tokens = {avg_tok_final:.1f}")
+    print(f"Normal reasoning : Accuracy = {acc_first:.2%},  Avg Tokens = {avg_tok_first:.1f}")
+    print(f"Leap reasoning      : Accuracy = {acc_final:.2%},  Avg Tokens = {avg_tok_final:.1f}")
     print("──────────────────────────────────────────────────────")
 
     with open("criterion_eval.jsonl", "w", encoding="utf-8") as outf:
