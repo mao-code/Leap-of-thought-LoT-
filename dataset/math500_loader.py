@@ -16,7 +16,7 @@ for ex in dl:
 from __future__ import annotations
 import itertools
 import re
-from typing import Iterator, List, Optional
+from typing import List, Optional
 
 from datasets import load_dataset
 from dataset.answer_normaliser import normalise as norm_ans 
