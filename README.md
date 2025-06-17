@@ -27,3 +27,14 @@ LOT_PROVIDER=local python -m reasoning_output.main --fewshot
 ```
 
 Evaluation summaries and detailed records are stored under `logs/`.
+
+
+## Dataset
+### Riddle
+* [LateralThinking](https://github.com/chenqi008/LateralThinking)
+* [BrainTeaser](https://github.com/1171-jpg/BrainTeaser)
+### Logic
+* [LOGIC-701](https://huggingface.co/datasets/hivaze/LOGIC-701/viewer/en/train?row=0)
+### Math
+* [GSM8K](https://huggingface.co/datasets/DaertML/gsm8k-jsonl)
+* [MATH500](https://huggingface.co/datasets/HuggingFaceH4/MATH-500)
