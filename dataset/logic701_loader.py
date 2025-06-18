@@ -11,7 +11,7 @@ class LOGIC701Loader:
 
     def __init__(self, split: str = "train", num_samples: Optional[int] = None):
         self._iter: Iterator[dict] = iter(
-            load_dataset("hivaze/LOGIC-701", split=split, streaming=True)
+            load_dataset("hivaze/LOGIC-701", "en", split=split, streaming=True)
         )
         self._num_samples = num_samples
         self._yielded = 0

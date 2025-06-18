@@ -7,3 +7,8 @@ if __name__ == "__main__":
         print("Q:", ex["question"])
         print("A:", ex["answers"])
         print()
+
+    """
+    Example usage:
+    python test_training_dataset.py
+    """
