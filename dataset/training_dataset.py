@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from typing import Iterable, List
+from typing import Iterable, List, Tuple
 
 from .lateral_thinking_loader import LateralThinkingLoader
 from .brainteaser_loader import BrainTeaserLoader
@@ -31,13 +31,13 @@ class TrainingDataset:
 
         n_logic701 = n_logic
 
-        # instantiate loaders with sample limits
-        self._loaders: List[Iterable[dict]] = [
-            LateralThinkingLoader(num_samples=n_lt),
-            BrainTeaserLoader(num_samples=n_bt),
-            LOGIC701Loader(split="train", num_samples=n_logic701),
-            GSM8KLoader(split="train", num_samples=n_gsm8k),
-            MATH500Loader(num_samples=n_math500),
+        # instantiate loaders with sample limits and metadata
+        self._loaders: List[Tuple[Iterable[dict], str, str]] = [
+            (LateralThinkingLoader(num_samples=n_lt), "riddle", "lateral_thinking"),
+            (BrainTeaserLoader(num_samples=n_bt), "riddle", "brainteaser"),
+            (LOGIC701Loader(split="train", num_samples=n_logic701), "logic", "logic701"),
+            (GSM8KLoader(split="train", num_samples=n_gsm8k), "math", "gsm8k"),
+            (MATH500Loader(num_samples=n_math500), "math", "math500"),
         ]
 
         self._data: List[dict] | None = None
@@ -46,9 +46,32 @@ class TrainingDataset:
     def _load_all(self) -> None:
         if self._data is not None:
             return
-        data = []
-        for loader in self._loaders:
-            data.extend(list(loader))
+        data: List[dict] = []
+
+        def _clean_and_tag(rec: dict, ds_type: str, ds_name: str) -> dict | None:
+            q = str(rec.get("question", "")).strip()
+            answers = [str(a).strip() for a in rec.get("answers", []) if a is not None]
+
+            # filter N/A or empty
+            if not q or q.lower() in {"n/a", "null", "none"}:
+                return None
+            answers = [a for a in answers if a and a.lower() not in {"n/a", "null", "none"}]
+            if not answers:
+                return None
+
+            return {
+                "question": q,
+                "answers": answers,
+                "type": ds_type,
+                "dataset": ds_name,
+            }
+
+        for loader, ds_type, ds_name in self._loaders:
+            for rec in loader:
+                tagged = _clean_and_tag(rec, ds_type, ds_name)
+                if tagged is not None:
+                    data.append(tagged)
+
         random.shuffle(data)
         self._data = data
 
