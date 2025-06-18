@@ -25,8 +25,9 @@ class Settings(BaseSettings):
         # deepseek-ai/DeepSeek-R1 (671B, cost $3/$7 per 1M input/output tokens)
     # HF models
         # deepseek-ai/DeepSeek-R1-Distill-Qwen-32B
+        # deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B
     model_name: str = Field(
-        "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B", env="LOT_MODEL_NAME"
+        "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", env="LOT_MODEL_NAME"
     )
     # CUDA / MPS / CPU
     device: str | None = Field('cuda', env="LOT_DEVICE")
