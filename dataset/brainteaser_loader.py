@@ -12,8 +12,8 @@ class BrainTeaserLoader:
     _FILE_MAP = {
         ("sentence", "train"): "dataset/data/brain_teaser/SP_train.npy",
         ("sentence", "test"): "dataset/data/brain_teaser/SP_test.npy",
-        ("word", "train"): "dataset/data/brain_teaser/WP_train.npy",
-        ("word", "test"): "dataset/data/brain_teaser/WP_test.npy",
+        # ("word", "train"): "dataset/data/brain_teaser/WP_train.npy",
+        # ("word", "test"): "dataset/data/brain_teaser/WP_test.npy",
     }
 
     def __init__(self, puzzle_type: str = "sentence", split: str = "train", num_samples: Optional[int] = None):
