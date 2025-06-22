@@ -14,8 +14,8 @@ class TrainingDataset:
     """Mix multiple datasets according to fixed proportions."""
 
     def __init__(self, total_samples: int = 1500):
-        if not (1000 <= total_samples <= 2000):
-            raise ValueError("total_samples must be between 1000 and 2000")
+        # if not (1000 <= total_samples <= 2000):
+        #     raise ValueError("total_samples must be between 1000 and 2000")
 
         # -- category level counts -------------------------------------------------
         n_riddle = round(total_samples * 0.3)
