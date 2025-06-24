@@ -151,8 +151,6 @@ def distill_dataset(
                 backoff = BASE_BACKOFF_SECONDS * (2 ** (retries - 1))
                 time.sleep(backoff)
 
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description="Convert raw data into ALoT training format using OpenAI API")
     parser.add_argument("--samples", type=int, default=1000, help="Number of samples to generate")
@@ -173,7 +171,7 @@ if __name__ == "__main__":
     Example usage:
     python -m dataset.alot_distiller \
         --samples 1000 \
-        --model o4-mini \
-        --output alot_dataset.jsonl \
+        --model o3 \
+        --output dataset/distilled_data/alot_dataset_o3.jsonl \
         --delay 0.1
     """
