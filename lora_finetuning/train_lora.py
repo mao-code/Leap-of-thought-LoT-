@@ -1,6 +1,7 @@
 import argparse
 import os
 
+import random
 from datasets import load_dataset
 from transformers import (
     AutoTokenizer,
@@ -8,6 +9,7 @@ from transformers import (
     TrainingArguments,
     Trainer,
     DataCollatorForLanguageModeling,
+    TrainerCallback,
 )
 from peft import LoraConfig, get_peft_model
 import wandb
@@ -29,6 +31,28 @@ class DialogueCollator(DataCollatorWithPadding):
         )
         return batch
 
+
+class QualitativeLogger(TrainerCallback):
+    """Log a random prompt and model output every ``log_steps`` steps."""
+
+    def __init__(self, tokenizer, raw_dataset, log_steps: int = 100, max_tokens: int = 128):
+        self.tokenizer = tokenizer
+        self.raw_dataset = raw_dataset
+        self.log_steps = log_steps
+        self.max_tokens = max_tokens
+
+    def on_step_end(self, args, state, control, **kwargs):
+        if state.global_step % self.log_steps != 0 or state.global_step == 0:
+            return
+
+        sample = random.choice(self.raw_dataset)
+        prompt = f"<|user|>\n{sample['question']}\n<|assistant|>\n"
+        model = kwargs["model"]
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(model.device)
+        out = model.generate(**inputs, max_new_tokens=self.max_tokens)
+        text = self.tokenizer.decode(out[0], skip_special_tokens=True)
+        wandb.log({"sample/prompt": prompt, "sample/output": text}, step=state.global_step)
+
 def load_data(path: str, tokenizer, max_length: int = 1024):
     data = load_dataset("json", data_files=path, split="train")
 
@@ -49,7 +73,7 @@ def load_data(path: str, tokenizer, max_length: int = 1024):
 
 
     tokenized = data.map(_format, remove_columns=data.column_names)
-    return tokenized
+    return tokenized, data
 
 
 def create_model(model_name: str, lora_r: int, lora_alpha: int, lora_dropout: float):
@@ -97,7 +121,7 @@ def main():
 
     tokenizer, model = create_model(args.model, args.lora_r, args.lora_alpha, args.lora_dropout)
 
-    dataset = load_data(args.dataset, tokenizer, args.max_length)
+    dataset, raw_data = load_data(args.dataset, tokenizer, args.max_length)
 
     # collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
     collator = DialogueCollator(tokenizer)
@@ -121,6 +145,7 @@ def main():
         args=training_args,
         train_dataset=dataset,
         data_collator=collator,
+        callbacks=[QualitativeLogger(tokenizer, raw_data)]
     )
 
     trainer.train()
