@@ -60,7 +60,7 @@ def main():
     parser.add_argument("--batch", type=int, default=4)
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--lr", type=float, default=5e-5)
-    parser.add_argument("--wandb-project", type=str, default="LoRA-ALoT")
+    parser.add_argument("--wandb-project", type=str, default="ALoT")
     parser.add_argument("--max-length", type=int, default=1024)
     parser.add_argument("--lora-r", type=int, default=8)
     parser.add_argument("--lora-alpha", type=int, default=32)
@@ -83,7 +83,9 @@ def main():
         logging_steps=10,
         save_strategy="epoch",
         report_to=["wandb"],
+        gradient_checkpointing=True
     )
+    model.config.use_cache = False # Disable cache for gradient checkpointing
 
     trainer = Trainer(
         model=model,
@@ -95,7 +97,26 @@ def main():
     trainer.train()
     model.save_pretrained(args.output)
     tokenizer.save_pretrained(args.output)
+    wandb.finish()
 
 
 if __name__ == "__main__":
     main()
+
+    """
+    Please set WANDB_API_KEY in your environment variables to enable Weights & Biases logging.
+
+    Example usage:
+    python -m lora_finetuning.train_lora \
+        --dataset dataset/distilled_data/alot_dataset_o3.jsonl \
+        --model deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B \
+        --output lora_finetuning/lora_adapter/1_5B_o3/ \
+        --batch 4 \
+        --epochs 3 \
+        --lr 5e-5 \
+        --wandb-project ALoT \
+        --max-length 1024 \
+        --lora-r 8 \
+        --lora-alpha 32 \
+        --lora-dropout 0.1
+    """
