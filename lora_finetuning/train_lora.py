@@ -66,7 +66,7 @@ def create_model(model_name: str, lora_r: int, lora_alpha: int, lora_dropout: fl
         r=lora_r,
         lora_alpha=lora_alpha,
         lora_dropout=lora_dropout,
-        target_modules=["q_proj","k_proj","v_proj","o_proj"],
+        target_modules="all-linear",
         bias="none",
         task_type="CAUSAL_LM",
     )
@@ -101,6 +101,7 @@ def main():
 
     # collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
     collator = DialogueCollator(tokenizer)
+
 
     training_args = TrainingArguments(
         output_dir=args.output,
