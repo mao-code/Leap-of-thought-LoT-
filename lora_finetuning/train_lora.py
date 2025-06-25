@@ -12,19 +12,41 @@ from transformers import (
 from peft import LoraConfig, get_peft_model
 import wandb
 
+from torch.nn.utils.rnn import pad_sequence
+from transformers import DataCollatorWithPadding
+import torch
+
+class DialogueCollator(DataCollatorWithPadding):
+    def __call__(self, features):
+        # Save and remove the label lists
+        label_lists = [torch.tensor(f.pop("labels"), dtype=torch.long) for f in features]
+        batch = super().__call__(features) # pads input_ids etc.
+        batch["labels"] = pad_sequence(
+            label_lists, # pads labels
+            batch_first=True,
+            padding_value=-100
+        
+        )
+        return batch
 
 def load_data(path: str, tokenizer, max_length: int = 1024):
     data = load_dataset("json", data_files=path, split="train")
 
-    def _format(example):
-        text = f"Problem: {example['question']}\n\n{example['solution']}"
+    def _format(ex):
+        prompt = f"<|user|>\n{ex['question']}\n<|assistant|>\n"
+        completion = ex['solution']
+        text = prompt + completion
         tokens = tokenizer(
             text,
             truncation=True,
             max_length=max_length,
         )
-        tokens["labels"] = tokens["input_ids"].copy()
+        # Mask the prompt part
+        prompt_len = len(tokenizer(prompt).input_ids)
+        labels = [-100] * prompt_len + tokens["input_ids"][prompt_len:]
+        tokens["labels"] = labels
         return tokens
+
 
     tokenized = data.map(_format, remove_columns=data.column_names)
     return tokenized
@@ -44,11 +66,14 @@ def create_model(model_name: str, lora_r: int, lora_alpha: int, lora_dropout: fl
         r=lora_r,
         lora_alpha=lora_alpha,
         lora_dropout=lora_dropout,
-        target_modules=["q_proj", "v_proj"],
+        target_modules=["q_proj","k_proj","v_proj","o_proj"],
         bias="none",
         task_type="CAUSAL_LM",
     )
+
     model = get_peft_model(model, peft_config)
+    model.print_trainable_parameters()  # sanity-check >0 params
+
     return tokenizer, model
 
 
@@ -67,13 +92,15 @@ def main():
     parser.add_argument("--lora-dropout", type=float, default=0.1)
     args = parser.parse_args()
 
-    wandb.init(project=args.wandb_project, name=os.path.basename(args.output))
+    run_name = f"{args.model.split('/')[-1]}_{args.dataset.split('/')[-1]}_lora_r{args.lora_r}_alpha{args.lora_alpha}_dropout{args.lora_dropout}"
+    wandb.init(project=args.wandb_project, name=run_name)
 
     tokenizer, model = create_model(args.model, args.lora_r, args.lora_alpha, args.lora_dropout)
 
     dataset = load_data(args.dataset, tokenizer, args.max_length)
 
-    collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
+    # collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
+    collator = DialogueCollator(tokenizer)
 
     training_args = TrainingArguments(
         output_dir=args.output,
@@ -83,6 +110,7 @@ def main():
         logging_steps=10,
         save_strategy="epoch",
         report_to=["wandb"],
+        run_name=run_name,
         gradient_checkpointing=True
     )
     model.config.use_cache = False # Disable cache for gradient checkpointing
