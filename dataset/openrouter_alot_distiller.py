@@ -8,6 +8,7 @@ from typing import Iterable
 
 from openai import OpenAI, OpenAIError, RateLimitError, APIConnectionError
 from tqdm import tqdm
+import requests
 
 from dataset import TrainingDataset
 import logging
@@ -37,7 +38,7 @@ You are an expert problem-solver.  Follow **all** tag rules exactly.
 2. You need clever external knowledge not found in the prompt.
 3. The problem hints at a trick or hidden pattern.
 4. You can solve the problem in short steps with a clever and creative insight.
-5. Use at least one LT leap if you can.
+5. Only use LT leap when it is needed.
 
 ### Resoning Format rules
 1. Produce exactly **one** <think> ... </think> block.
@@ -60,7 +61,7 @@ Question: 1 + 1 = ?
 {"reasoning":"<think>Simply add the numbers.</think>\n**Answer:** 2","answer":"2"}
 
 Question: A farmer has pigs and chickens totalling 22 heads and 68 legs. How many pigs?
-{"reasoning":"<think>Let x=pigs, y=chickens. Heads: x+y=22. Legs: 4x+2y=68. <leap>Each pig adds 2 extra legs over a chicken; so (68/2)-22=12.</leap></think>\n**Answer:** 12","answer":"12"}
+{"reasoning":"<think>Let x=pigs, y=chickens. Heads: x+y=22. Legs: 4x+2y=68. <leap>Wait, I think it can be solved in a more efficient way! Each pig adds 2 extra legs over a chicken; so (68/2)-22=12.</leap></think>\n**Answer:** 12","answer":"12"}
 """
 
 
@@ -75,16 +76,21 @@ def build_messages(question: str, answer: str) -> list[dict]:
     ]
 
 
-def generate_reasoning(client: OpenAI, question: str, answer: str, model_name: str) -> str:
-    messages = build_messages(question, answer)
-    response = client.chat.completions.create(
+def generate_reasoning(client, question: str, answer: str, model_name: str) -> str:
+    completion = client.chat.completions.create(
         model=model_name,
-        messages=messages,
+        messages=build_messages(question, answer),
         response_format={"type":"json_object"}
     )
-    return response.choices[0].message.content.strip()
 
+    
+    message = completion.choices[0].message
+    response_text = message.content.strip()
 
+    print("="*10, f"Message: {message}")  # Debugging line
+    print("="*10, f"Response: {response_text}")  # Debugging line
+
+    return response_text
 
 def distill_dataset(
     dataset: Iterable[dict],
@@ -93,15 +99,15 @@ def distill_dataset(
     delay: float = 0.0,
     target_samples: int | None = None,    # optional explicit quota
 ) -> None:
-    client = OpenAI(
-        api_key=OPENROUTER_API_KEY,
-        base_url="https://openrouter.ai/api/v1",
-    )
-
     # If TrainingDataset is finite we know its length; otherwise rely on target_samples
     total_needed = target_samples or (len(dataset) if hasattr(dataset, "__len__") else None)
     if total_needed is None:
         raise ValueError("Must supply target_samples when dataset is infinite / stream.")
+    
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=OPENROUTER_API_KEY,
+    )
 
     successes = 0
     it = iter(dataset)
@@ -125,10 +131,12 @@ def distill_dataset(
                     )
 
                     output = json.loads(output_raw)
+                    reasoning = output.get("reasoning", "").strip()
+
                     out_rec = {
                         "question": record["question"],
-                        "solution": output["reasoning"],
-                        "uses_leap": "<leap>" in output["reasoning"],
+                        "solution": reasoning,
+                        "uses_leap": "<leap>" in reasoning,
                         "answer": record["answers"][0],
                         "dataset": record.get("dataset"),
                         "type":    record.get("type"),
@@ -142,8 +150,8 @@ def distill_dataset(
                         time.sleep(delay)
                     break
 
-                except (json.JSONDecodeError, KeyError) as e:
-                    logging.warning(f"Bad JSON for q='{record['question'][:50]}…': {e}")
+                except (json.JSONDecodeError, KeyError, ValueError) as e:
+                    logging.warning(f"Bad JSON for q='{record['question'][:50]}...': {e}")
                 except (RateLimitError, APIConnectionError, OpenAIError) as e:
                     logging.warning(f"OpenRouter error: {e}")
 
@@ -160,13 +168,13 @@ def main() -> None:
     parser.add_argument(
         "--model",
         type=str,
-        default="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+        default="deepseek/deepseek-r1-distill-qwen-32b",
         help="OpenRouter model to use for reasoning",
     )
     parser.add_argument(
         "--output",
         type=str,
-        default="alot_dataset_openrouter.jsonl",
+        default="dataset/distilled_data/alot_dataset_r1distilled_qwen_32B.jsonl",
         help="Where to write the distilled dataset",
     )
     parser.add_argument("--delay", type=float, default=0.0, help="Seconds to sleep between API calls")
@@ -184,7 +192,7 @@ if __name__ == "__main__":
     Example usage:
     python -m dataset.openrouter_alot_distiller \
         --samples 3 \
-        --model deepseek/deepseek-r1:free \
-        --output dataset/distilled_data/alot_dataset_deepseekr1_671B_37B.jsonl \
+        --model deepseek/deepseek-r1-distill-qwen-32b \
+        --output dataset/distilled_data/alot_dataset_r1distilled_qwen_32B.jsonl \
         --delay 0.1
     """

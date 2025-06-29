@@ -3,6 +3,8 @@ from __future__ import annotations
 import random
 from typing import Iterable, List, Tuple
 
+from utils import set_seed
+
 from .lateral_thinking_loader import LateralThinkingLoader
 from .brainteaser_loader import BrainTeaserLoader
 from .logic701_loader import LOGIC701Loader
@@ -14,6 +16,7 @@ class TrainingDataset:
     """Mix multiple datasets according to fixed proportions."""
 
     def __init__(self, total_samples: int = 1500):
+        set_seed()
         # if not (1000 <= total_samples <= 2000):
         #     raise ValueError("total_samples must be between 1000 and 2000")
 
