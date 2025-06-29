@@ -95,3 +95,12 @@ def main():
 if __name__ == "__main__":
     main()
 
+    """
+    Example usage:
+    python -m lora_finetuning.eval_lora \
+        --dataset dataset/distilled_data/alot_dataset_o4_mini.jsonl \
+        --model deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B \
+        --adapter lora_finetuning/lora_adapter/1_5B_o3/ \
+        --log lora_eval_log.json
+    """
+

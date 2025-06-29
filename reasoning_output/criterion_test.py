@@ -10,7 +10,6 @@ from dataset.math500_loader import MATH500Loader
 from reasoning_output.src.generator import LeapGenerator
 from reasoning_output.src.utils import extract_answer  
 from reasoning_output.src.utils import normalize_answer  
-# from dataset.answer_normaliser import normalise as normalize_answer   
 from utils import set_seed
 import json
 

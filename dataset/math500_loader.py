@@ -1,6 +1,4 @@
 """
-math500_loader.py
-~~~~~~~~~~~~~~~~~
 Streaming DataLoader for the HuggingFaceH4/MATH-500 benchmark.
 
 Example
@@ -10,7 +8,7 @@ from math500_loader import MATH500Loader
 dl = MATH500Loader(num_samples=10)   # stream first 10 items
 for ex in dl:
     print(ex["question"])
-    print(ex["answers"])   # list[str] – usually length 1
+    print(ex["answers"])   # list[str] - usually length 1
 """
 
 from __future__ import annotations
@@ -19,9 +17,6 @@ import re
 from typing import List, Optional
 
 from datasets import load_dataset
-from dataset.answer_normaliser import normalise as norm_ans 
-
-_BOX_RE = re.compile(r"\\boxed\s*{([^}]*)}")   # matches \boxed{...}
 
 class MATH500Loader:
     """
@@ -43,16 +38,7 @@ class MATH500Loader:
 
         self._num_samples = num_samples
         self._samples_yielded = 0
-
-    # --------------------------------------------------------------------- #
-    #  Helpers
-    # --------------------------------------------------------------------- #
-    def _clean_answer(self, raw: str) -> str:
-        return norm_ans(raw)
-
-    # --------------------------------------------------------------------- #
-    #  Python iterator protocol
-    # --------------------------------------------------------------------- #
+        
     def __iter__(self):
         for rec in self._dataset_iter:
             if (self._num_samples is not None
@@ -68,13 +54,7 @@ class MATH500Loader:
             }
             self._samples_yielded += 1
 
-    # --------------------------------------------------------------------- #
-    #  Convenience utility
-    # --------------------------------------------------------------------- #
     def get_examples(self, n: int) -> List[dict]:
-        """
-        Return the next *n* streamed examples (≤ remaining budget).
-        """
         if self._num_samples is not None:
             n = min(n, max(0, self._num_samples - self._samples_yielded))
 
@@ -83,7 +63,7 @@ class MATH500Loader:
 
         for rec in sliced:
             question = rec.get("problem", "").strip()
-            short_ans = self._clean_answer(rec.get("answer", ""))
+            short_ans = rec.get("answer", "")
 
             batch.append({
                 "question": question,

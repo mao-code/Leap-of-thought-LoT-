@@ -18,6 +18,14 @@ from torch.nn.utils.rnn import pad_sequence
 from transformers import DataCollatorWithPadding
 import torch
 
+SYSTEM_PROMPT = (
+    "You are an expert problem-solver.\n"
+    "* Use *vertical thinking* (orderly, logical steps) and write those steps inside <think> … </think>.\n"
+    "* Any creative or cross-domain jump belongs in a nested <leap> … </leap> tag.\n"
+    "* Finish with a concise answer on a new line that begins with **Answer:**\n"
+    "Format strictly as shown."
+)
+
 class DialogueCollator(DataCollatorWithPadding):
     def __call__(self, features):
         # Save and remove the label lists
@@ -35,7 +43,7 @@ class DialogueCollator(DataCollatorWithPadding):
 class QualitativeLogger(TrainerCallback):
     """Log a random prompt and model output every ``log_steps`` steps."""
 
-    def __init__(self, tokenizer, raw_dataset, log_steps: int = 100, max_tokens: int = 128):
+    def __init__(self, tokenizer, raw_dataset, log_steps: int = 10, max_tokens: int = 2048):
         self.tokenizer = tokenizer
         self.raw_dataset = raw_dataset
         self.log_steps = log_steps
@@ -46,18 +54,36 @@ class QualitativeLogger(TrainerCallback):
             return
 
         sample = random.choice(self.raw_dataset)
-        prompt = f"<|user|>\n{sample['question']}\n<|assistant|>\n"
+        prompt = (
+            "<|system|>\n"
+            f"{SYSTEM_PROMPT}\n"
+            "<|user|>\n"
+            f"Please solve the problem:\n{sample['question']}\n"
+            "<|assistant|>\n<think>"
+        )
         model = kwargs["model"]
         inputs = self.tokenizer(prompt, return_tensors="pt").to(model.device)
         out = model.generate(**inputs, max_new_tokens=self.max_tokens)
         text = self.tokenizer.decode(out[0], skip_special_tokens=True)
+        
+        print(f"\n[Step {state.global_step}]")
+        print("Prompt:\n", prompt)
+        print("Model output:\n", text)
+        print("-" * 80)
+
         wandb.log({"sample/prompt": prompt, "sample/output": text}, step=state.global_step)
 
-def load_data(path: str, tokenizer, max_length: int = 1024):
+def load_data(path: str, tokenizer, max_length: int = 2048):
     data = load_dataset("json", data_files=path, split="train")
 
     def _format(ex):
-        prompt = f"<|user|>\n{ex['question']}\n<|assistant|>\n"
+        prompt = (
+            "<|system|>\n"
+            f"{SYSTEM_PROMPT}\n"
+            "<|user|>\n"
+            f"Please solve the problem:\n{ex['question']}\n"
+            "<|assistant|>\n<think>"
+        )
         completion = ex['solution']
         text = prompt + completion
         tokens = tokenizer(
@@ -110,7 +136,7 @@ def main():
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--lr", type=float, default=5e-5)
     parser.add_argument("--wandb-project", type=str, default="ALoT")
-    parser.add_argument("--max-length", type=int, default=1024)
+    parser.add_argument("--max-length", type=int, default=2048)
     parser.add_argument("--lora-r", type=int, default=8)
     parser.add_argument("--lora-alpha", type=int, default=32)
     parser.add_argument("--lora-dropout", type=float, default=0.1)
@@ -132,12 +158,15 @@ def main():
         num_train_epochs=args.epochs,
         per_device_train_batch_size=args.batch,
         learning_rate=args.lr,
-        logging_steps=10,
+        logging_steps=1,
         save_strategy="epoch",
         report_to=["wandb"],
         run_name=run_name,
         gradient_checkpointing=True
     )
+
+    model.gradient_checkpointing_enable()
+    model.enable_input_require_grads() 
     model.config.use_cache = False # Disable cache for gradient checkpointing
 
     trainer = Trainer(
