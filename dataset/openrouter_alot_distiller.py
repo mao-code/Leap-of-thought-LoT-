@@ -25,7 +25,7 @@ if not OPENROUTER_API_KEY:
 
 # Focus on waht is ALoT and when to use it
 SYSTEM_PROMPT = """
-You are an expert problem-solver.  Follow **all** tag rules exactly.
+You are an expert problem-solver.
 
 ### Glossary
 * Vertical Thinking (VT): orderly, rule-based logic steps.
@@ -86,11 +86,13 @@ def generate_reasoning(client, question: str, answer: str, model_name: str) -> s
     
     message = completion.choices[0].message
     response_text = message.content.strip()
+    reasoning_text = message.reasoning.strip()
 
     print("="*10, f"Message: {message}")  # Debugging line
-    print("="*10, f"Response: {response_text}")  # Debugging line
+    print("="*10, f"Content: {response_text}")  # Debugging line
+    print("="*10, f"Reasoning: {reasoning_text}")
 
-    return response_text
+    return reasoning_text
 
 def distill_dataset(
     dataset: Iterable[dict],
@@ -192,7 +194,7 @@ if __name__ == "__main__":
     Example usage:
     python -m dataset.openrouter_alot_distiller \
         --samples 3 \
-        --model deepseek/deepseek-r1-distill-qwen-32b \
-        --output dataset/distilled_data/alot_dataset_r1distilled_qwen_32B.jsonl \
+        --model deepseek/deepseek-r1-distill-llama-70b \
+        --output dataset/distilled_data/alot_dataset_r1distilled_llama_70B.jsonl \
         --delay 0.1
     """

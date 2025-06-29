@@ -20,8 +20,8 @@ import torch
 
 SYSTEM_PROMPT = (
     "You are an expert problem-solver.\n"
-    "* Use *vertical thinking* (orderly, logical steps) and write those steps inside <think> … </think>.\n"
-    "* Any creative or cross-domain jump belongs in a nested <leap> … </leap> tag.\n"
+    "* Use *vertical thinking* (orderly, logical steps) and write those steps inside <think> ... </think>.\n"
+    "* Any creative or cross-domain jump belongs in a nested <leap> ... </leap> tag.\n"
     "* Finish with a concise answer on a new line that begins with **Answer:**\n"
     "Format strictly as shown."
 )
