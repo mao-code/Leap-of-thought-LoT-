@@ -38,7 +38,7 @@ class MATH500Loader:
 
         self._num_samples = num_samples
         self._samples_yielded = 0
-        
+
     def __iter__(self):
         for rec in self._dataset_iter:
             if (self._num_samples is not None
@@ -46,7 +46,7 @@ class MATH500Loader:
                 break
 
             question = rec.get("problem", "").strip()
-            short_ans = self._clean_answer(rec.get("answer", ""))
+            short_ans = rec.get("answer", "")
 
             yield {
                 "question": question,

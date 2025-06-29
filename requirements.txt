@@ -5,6 +5,7 @@ pydantic-settings
 tqdm
 
 openai
+openrouter
 torch
 transformers
 accelerate
